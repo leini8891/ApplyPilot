@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { extensionEnv } from '../shared/env';
 import type { ExtensionMessage, PopupState } from '../shared/messages';
+import { getTinyFishApiKey, saveTinyFishApiKey } from '../tinyfish/client';
 
 const defaultState: PopupState = {
   runStatus: 'idle',
@@ -24,6 +25,8 @@ export function PopupApp() {
   const [extensionState, setExtensionState] = useState<PopupState>(defaultState);
   const [summary, setSummary] = useState<DashboardSummary['summary'] | null>(null);
   const [targetCount, setTargetCount] = useState(10);
+  const [tinyFishApiKey, setTinyFishApiKey] = useState('');
+  const [tinyFishSaved, setTinyFishSaved] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -43,6 +46,14 @@ export function PopupApp() {
         setSummary(data.summary);
       } catch {
         setError('Dashboard API is unavailable.');
+      }
+
+      try {
+        const savedApiKey = await getTinyFishApiKey();
+        setTinyFishApiKey(savedApiKey);
+        setTinyFishSaved(true);
+      } catch {
+        setTinyFishSaved(false);
       }
     };
 
@@ -115,6 +126,17 @@ export function PopupApp() {
     }
   };
 
+  const saveTinyFishKey = async () => {
+    setError('');
+    try {
+      await saveTinyFishApiKey(tinyFishApiKey);
+      setTinyFishSaved(true);
+    } catch (error) {
+      setTinyFishSaved(false);
+      setError(error instanceof Error ? error.message : 'Could not save the TinyFish API key.');
+    }
+  };
+
   return (
     <div className="popup-root">
       <div className="hero">
@@ -148,6 +170,25 @@ export function PopupApp() {
           value={targetCount}
         />
       </label>
+
+      <label className="popup-field">
+        <span>TinyFish API key</span>
+        <input
+          onChange={(event) => {
+            setTinyFishApiKey(event.target.value);
+            setTinyFishSaved(false);
+          }}
+          placeholder="Paste your TinyFish key"
+          type="password"
+          value={tinyFishApiKey}
+        />
+      </label>
+
+      <div className="actions">
+        <button className="secondary" onClick={saveTinyFishKey} type="button">
+          {tinyFishSaved ? 'Saved' : 'Save TinyFish key'}
+        </button>
+      </div>
 
       <div className="actions">
         <button className="primary" onClick={startRun} type="button">

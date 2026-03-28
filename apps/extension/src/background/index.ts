@@ -1,6 +1,5 @@
 import type { ExtensionMessage, PopupState, WorkerJobPlan } from '../shared/messages';
 import { extensionEnv } from '../shared/env';
-
 const SUPPORTED_JOB_HOSTS = ['linkedin.com/jobs', 'mycareersfuture.gov.sg'] as const;
 const PENDING_WORKER_RUNS_KEY = 'applypilot-pending-worker-runs';
 
@@ -99,6 +98,26 @@ const proxyApiRequest = async ({
   };
 };
 
+const apiRequest = async <T>(
+  path: string,
+  init?: {
+    method?: 'GET' | 'POST' | 'PUT' | 'PATCH';
+    body?: unknown;
+  },
+) => {
+  const response = await proxyApiRequest({
+    path,
+    method: init?.method,
+    body: init?.body,
+  });
+
+  if (!response.ok) {
+    throw new Error(response.error);
+  }
+
+  return response.data as T;
+};
+
 const isSupportedJobUrl = (url?: string | null) =>
   Boolean(url && SUPPORTED_JOB_HOSTS.some((host) => url.includes(host)));
 
@@ -109,6 +128,51 @@ const getActiveSupportedTab = async () => {
   });
 
   return isSupportedJobUrl(tab?.url) ? tab : null;
+};
+
+const startRunOnCurrentPage = async ({
+  activeTabId,
+}: {
+  activeTabId: number;
+}) => {
+  const response = await sendMessageToTab<{ ok?: boolean; error?: string }>(activeTabId, {
+    type: 'applypilot:start-run-on-page',
+    targetCount: 1,
+    apiBaseUrl: extensionEnv.VITE_API_BASE_URL,
+    sourceTabId: activeTabId,
+  } satisfies ExtensionMessage);
+
+  if (!response?.ok) {
+    throw new Error(
+      response?.error ?? 'ApplyPilot did not receive a start confirmation from the page.',
+    );
+  }
+};
+
+const startLocalRunWithRetry = async ({
+  activeTabId,
+}: {
+  activeTabId: number;
+}) => {
+  try {
+    await startRunOnCurrentPage({
+      activeTabId,
+    });
+  } catch (error) {
+    if (!shouldReloadJobSiteTab(error)) {
+      throw error;
+    }
+
+    await saveState({
+      runStatus: 'running',
+      recentResult: 'Refreshing the job site page to attach ApplyPilot...',
+    });
+    await chrome.tabs.reload(activeTabId);
+    await waitForTabComplete(activeTabId);
+    await startRunOnCurrentPage({
+      activeTabId,
+    });
+  }
 };
 
 const isSupportedJobTab = (tab: chrome.tabs.Tab | null | undefined) =>
@@ -219,28 +283,11 @@ const sendMessageToTab = async <TResponse>(
 };
 
 const buildWorkerJobUrl = (plan: WorkerJobPlan, sourceTabUrl?: string) => {
-  if (sourceTabUrl) {
-    try {
-      const url = new URL(sourceTabUrl);
-      if (
-        url.hostname.includes('linkedin.com') &&
-        (/\/jobs\/search/.test(url.pathname) || /\/jobs\/search-results/.test(url.pathname))
-      ) {
-        url.searchParams.set('currentJobId', plan.job.externalJobId);
-          return url.toString();
-      }
-
-      if (url.hostname.includes('mycareersfuture.gov.sg')) {
-        return plan.job.url;
-      }
-    } catch {
-      // Fall back to the direct job URL when the current tab URL cannot be reused safely.
-    }
-  }
-
   return plan.job.url?.startsWith('https://www.linkedin.com/jobs/')
     ? plan.job.url
-    : `https://www.linkedin.com/jobs/view/${plan.job.externalJobId}/`;
+    : sourceTabUrl && sourceTabUrl.includes('mycareersfuture.gov.sg')
+      ? plan.job.url
+      : `https://www.linkedin.com/jobs/view/${plan.job.externalJobId}/`;
 };
 
 const pendingWorkerCompletions = new Map<
@@ -261,17 +308,12 @@ const runPlanInWorkerTab = async ({
   plan: WorkerJobPlan;
 }) => {
   const sourceTab = await chrome.tabs.get(sourceTabId);
-  const canDuplicateSearchResultsTab = Boolean(
-    sourceTab.url && /linkedin\.com\/jobs\/search(?:-results)?/i.test(sourceTab.url),
-  );
-  const workerTab = canDuplicateSearchResultsTab
-    ? await chrome.tabs.duplicate(sourceTabId)
-    : await chrome.tabs.create({
-        url: buildWorkerJobUrl(plan, sourceTab.url),
-        active: true,
-        windowId: sourceTab.windowId,
-        index: typeof sourceTab.index === 'number' ? sourceTab.index + 1 : undefined,
-      });
+  const workerTab = await chrome.tabs.create({
+    url: buildWorkerJobUrl(plan, sourceTab.url),
+    active: true,
+    windowId: sourceTab.windowId,
+    index: typeof sourceTab.index === 'number' ? sourceTab.index + 1 : undefined,
+  });
 
   if (!workerTab?.id) {
     throw new Error(`Could not open a worker tab for ${plan.job.title}.`);
@@ -398,6 +440,7 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendRe
           return;
         }
         const activeTabId = activeTab?.id;
+        const activeTabUrl = activeTab?.url ?? '';
 
         if (activeTabId === undefined) {
           sendResponse({ ok: false, error: 'Could not resolve the active job-site tab.' });
@@ -411,69 +454,21 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendRe
         });
 
         try {
-          const response = await sendMessageToTab<{ ok?: boolean; error?: string }>(activeTabId, {
-            type: 'applypilot:start-run-on-page',
-            targetCount: message.targetCount,
-            apiBaseUrl: extensionEnv.VITE_API_BASE_URL,
-            sourceTabId: activeTabId,
-          } satisfies ExtensionMessage);
-
-          if (!response?.ok) {
-            throw new Error(
-              response?.error ?? 'ApplyPilot did not receive a start confirmation from the page.',
-            );
-          }
+          await startLocalRunWithRetry({
+            activeTabId,
+          });
         } catch (error) {
-          if (!shouldReloadJobSiteTab(error)) {
-            const messageText =
-              error instanceof Error ? error.message : 'ApplyPilot could not start this run.';
-            await saveState({
-              runStatus: 'failed',
-              recentResult: messageText,
-            });
-            sendResponse({
-              ok: false,
-              error: messageText,
-            });
-            return;
-          }
-
-          try {
-            await saveState({
-              runStatus: 'running',
-              recentResult: 'Refreshing the job site page to attach ApplyPilot...',
-            });
-            await chrome.tabs.reload(activeTabId);
-            await waitForTabComplete(activeTabId);
-            const retryResponse = await sendMessageToTab<{ ok?: boolean; error?: string }>(activeTabId, {
-              type: 'applypilot:start-run-on-page',
-              targetCount: message.targetCount,
-              apiBaseUrl: extensionEnv.VITE_API_BASE_URL,
-              sourceTabId: activeTabId,
-            } satisfies ExtensionMessage);
-
-            if (!retryResponse?.ok) {
-              throw new Error(
-                retryResponse?.error ?? 'ApplyPilot did not receive a start confirmation from the page.',
-              );
-            }
-          } catch (retryError) {
-            const messageText =
-              retryError instanceof Error
-                ? retryError.message
-                : error instanceof Error
-                  ? error.message
-                  : 'ApplyPilot could not attach to this job site page.';
-            await saveState({
-              runStatus: 'failed',
-              recentResult: messageText,
-            });
-            sendResponse({
-              ok: false,
-              error: messageText,
-            });
-            return;
-          }
+          const messageText =
+            error instanceof Error ? error.message : 'ApplyPilot could not start this run.';
+          await saveState({
+            runStatus: 'failed',
+            recentResult: messageText,
+          });
+          sendResponse({
+            ok: false,
+            error: messageText,
+          });
+          return;
         }
 
         sendResponse({ ok: true });

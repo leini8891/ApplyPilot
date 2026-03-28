@@ -53,6 +53,9 @@ export type ExtensionMessage =
       apiBaseUrl: string;
     }
   | {
+      type: 'applypilot:collect-current-job-on-page';
+    }
+  | {
       type: 'applypilot:start-run-on-page';
       targetCount: number;
       apiBaseUrl: string;

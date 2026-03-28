@@ -301,15 +301,13 @@ export const store = {
         .eq('id', candidateId)
         .maybeSingle();
 
-      if (error && !handleSupabaseError(error, 'getProfile')) {
-        throw error;
-      }
-
-      if (data) {
+      if (error) {
+        if (!handleSupabaseError(error, 'getProfile')) {
+          throw error;
+        }
+      } else if (data) {
         return mapRow.profile(data);
       }
-
-      return null;
     }
 
     return listFromMemory(memoryStore.profiles).find((profile) => profile.id === candidateId) ?? null;
@@ -396,15 +394,13 @@ export const store = {
         .eq('candidate_id', candidateId)
         .order('created_at', { ascending: false });
 
-      if (error && !handleSupabaseError(error, 'listResumes')) {
-        throw error;
-      }
-
-      if (data) {
+      if (error) {
+        if (!handleSupabaseError(error, 'listResumes')) {
+          throw error;
+        }
+      } else if (data) {
         return data.map(mapRow.resume);
       }
-
-      return [];
     }
 
     return listFromMemory(memoryStore.resumes).filter((resume) => resume.candidateId === candidateId);
@@ -449,15 +445,13 @@ export const store = {
         .eq('candidate_id', candidateId)
         .maybeSingle();
 
-      if (error && !handleSupabaseError(error, 'getPreferences')) {
-        throw error;
-      }
-
-      if (data) {
+      if (error) {
+        if (!handleSupabaseError(error, 'getPreferences')) {
+          throw error;
+        }
+      } else if (data) {
         return mapRow.preference(data);
       }
-
-      return null;
     }
 
     return (
@@ -541,15 +535,13 @@ export const store = {
         .select('*')
         .order('scraped_at', { ascending: false });
 
-      if (error && !handleSupabaseError(error, 'listJobs')) {
-        throw error;
-      }
-
-      if (data) {
+      if (error) {
+        if (!handleSupabaseError(error, 'listJobs')) {
+          throw error;
+        }
+      } else if (data) {
         return data.map(mapRow.job);
       }
-
-      return [];
     }
 
     return listFromMemory(memoryStore.jobs);
@@ -624,15 +616,13 @@ export const store = {
         .eq('candidate_id', candidateId)
         .order('generated_at', { ascending: false });
 
-      if (error && !handleSupabaseError(error, 'listTailoredResumes')) {
-        throw error;
-      }
-
-      if (data) {
+      if (error) {
+        if (!handleSupabaseError(error, 'listTailoredResumes')) {
+          throw error;
+        }
+      } else if (data) {
         return data.map(mapRow.tailoredResume);
       }
-
-      return [];
     }
 
     return listFromMemory(memoryStore.tailoredResumes).filter(
@@ -676,15 +666,13 @@ export const store = {
         .eq('candidate_id', candidateId)
         .order('started_at', { ascending: false });
 
-      if (error && !handleSupabaseError(error, 'listRuns')) {
-        throw error;
-      }
-
-      if (data) {
+      if (error) {
+        if (!handleSupabaseError(error, 'listRuns')) {
+          throw error;
+        }
+      } else if (data) {
         return data.map(mapRow.run);
       }
-
-      return [];
     }
 
     return listFromMemory(memoryStore.runs).filter((run) => run.candidateId === candidateId);
@@ -738,15 +726,13 @@ export const store = {
         .in('run_id', runIds)
         .order('updated_at', { ascending: false });
 
-      if (error && !handleSupabaseError(error, 'listAttempts')) {
-        throw error;
-      }
-
-      if (data) {
+      if (error) {
+        if (!handleSupabaseError(error, 'listAttempts')) {
+          throw error;
+        }
+      } else if (data) {
         return data.map(mapRow.attempt);
       }
-
-      return [];
     }
 
     const runIds = findRunIdsForCandidate(candidateId, memoryStore.runs);
@@ -810,19 +796,13 @@ export const store = {
         .in('application_id', [...applicationIds])
         .order('created_at', { ascending: false });
 
-      if (error && !handleSupabaseError(error, 'listReviewQueue')) {
-        throw error;
-      }
-
-      if (data) {
+      if (error) {
+        if (!handleSupabaseError(error, 'listReviewQueue')) {
+          throw error;
+        }
+      } else if (data) {
         return data.map(mapRow.review);
       }
-
-      return [];
-    }
-
-    if (isDbMode(supabase)) {
-      return [];
     }
 
     return listFromMemory(memoryStore.reviews).filter((review) =>
@@ -871,19 +851,13 @@ export const store = {
         .in('application_id', [...applicationIds])
         .order('created_at', { ascending: false });
 
-      if (error && !handleSupabaseError(error, 'listInterviews')) {
-        throw error;
-      }
-
-      if (data) {
+      if (error) {
+        if (!handleSupabaseError(error, 'listInterviews')) {
+          throw error;
+        }
+      } else if (data) {
         return data.map(mapRow.interview);
       }
-
-      return [];
-    }
-
-    if (isDbMode(supabase)) {
-      return [];
     }
 
     return listFromMemory(memoryStore.interviews).filter((interview) =>

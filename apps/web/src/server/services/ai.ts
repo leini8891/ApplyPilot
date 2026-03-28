@@ -35,6 +35,46 @@ const parseJsonContent = <T>(value: string | null | undefined, fallback: T) => {
   }
 };
 
+const NAME_LINE_PATTERN = /^[A-Z][A-Za-z'’.-]+(?:\s+[A-Z][A-Za-z'’.-]+){1,3}$/;
+const NAME_STOPWORDS =
+  /\b(experience|specialize|specialise|product|growth|strategy|data|analyst|manager|lead|summary|profile|singapore|fintech|web3)\b/i;
+
+const inferLikelyNameFromResumeText = (text: string) => {
+  const lines = text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 20);
+
+  for (const line of lines) {
+    const candidate = line.replace(/\s+/g, ' ').trim();
+    if (candidate.length > 2 && candidate.length <= 60 && NAME_LINE_PATTERN.test(candidate) && !NAME_STOPWORDS.test(candidate)) {
+      return candidate;
+    }
+  }
+
+  return '';
+};
+
+const sanitizeCandidateProfile = (candidateId: string, resumeText: string, profile: CandidateProfile) => {
+  const inferredName = inferLikelyNameFromResumeText(resumeText);
+  const safeFullName =
+    profile.fullName.trim().length > 0 &&
+    profile.fullName.trim().split(/\s+/).length <= 5 &&
+    !NAME_STOPWORDS.test(profile.fullName)
+      ? profile.fullName.trim()
+      : inferredName || profile.fullName.trim() || 'Candidate';
+
+  return candidateProfileSchema.parse({
+    ...profile,
+    id: candidateId,
+    fullName: safeFullName,
+    phone: profile.phone.trim(),
+    location: profile.location.trim(),
+    lastParsedAt: new Date().toISOString(),
+  });
+};
+
 const fallbackParseProfile = (candidateId: string, text: string): CandidateProfile => {
   const email = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] ?? '';
   const phone = text.match(/(\+\d{1,3}[\s-]?)?(\d[\s-]?){8,}/)?.[0] ?? '';
@@ -46,7 +86,7 @@ const fallbackParseProfile = (candidateId: string, text: string): CandidateProfi
   const inferredName = lines[0] ?? 'Candidate';
   const skills = [...new Set((text.match(/\b[A-Z][A-Za-z0-9+#]{2,}\b/g) ?? []).slice(0, 12))];
 
-  return candidateProfileSchema.parse({
+  return sanitizeCandidateProfile(candidateId, text, candidateProfileSchema.parse({
     id: candidateId,
     fullName: inferredName,
     email,
@@ -60,7 +100,7 @@ const fallbackParseProfile = (candidateId: string, text: string): CandidateProfi
     industries: ['Fintech'],
     education: [],
     lastParsedAt: new Date().toISOString(),
-  });
+  }));
 };
 
 export const parseCandidateProfileWithAi = async ({
@@ -129,11 +169,11 @@ export const parseCandidateProfileWithAi = async ({
     });
 
     const response = completion.choices[0]?.message?.content;
-    return candidateProfileSchema.parse({
+    return sanitizeCandidateProfile(candidateId, resumeText, candidateProfileSchema.parse({
       ...parseJsonContent<Record<string, unknown>>(response, {}),
       id: candidateId,
       lastParsedAt: new Date().toISOString(),
-    });
+    }));
   } catch {
     return fallbackParseProfile(candidateId, resumeText);
   }
@@ -308,4 +348,3 @@ export const generateTailoredResumeWithAi = async ({
     };
   }
 };
-

@@ -28,7 +28,17 @@ const runState = {
 
 const contentScriptWindow = window as Window & {
   __applypilotLinkedInListenerRegistered?: boolean;
+  __applypilotLinkedInAutoResumeStarted?: boolean;
 };
+
+const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+  window.HTMLInputElement.prototype,
+  'value',
+)?.set;
+const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(
+  window.HTMLTextAreaElement.prototype,
+  'value',
+)?.set;
 
 const isTransientRuntimeMessageError = (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error ?? '');
@@ -104,8 +114,120 @@ const isVisible = (element: Element) => {
   return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
 };
 
-const getVisibleDialogs = () =>
-  Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"]')).filter((dialog) => isVisible(dialog));
+const getHeuristicDialogContainers = () => {
+  const candidates = new Set<HTMLElement>();
+  const actionPattern = /next|review|continue|preview|submit|done|下一|继续|审核|预览|查看|提交|完成/i;
+  const fieldPattern = /email|phone|mobile|联系电话|联系方式/i;
+
+  Array.from(document.querySelectorAll<HTMLElement>('button, a, [role="button"]'))
+    .filter((button) => isVisible(button))
+    .forEach((button) => {
+      const label = firstNonEmpty(
+        textOf(button),
+        button.getAttribute('aria-label'),
+        button.getAttribute('data-control-name'),
+      );
+      if (!actionPattern.test(label)) {
+        return;
+      }
+
+      const container =
+        button.closest<HTMLElement>(
+          [
+            '[role="dialog"]',
+            '.artdeco-modal',
+            '.artdeco-modal__content',
+            '.jobs-easy-apply-modal',
+            '.jobs-easy-apply-modal__content',
+            '.jobs-easy-apply-content',
+            '.jobs-easy-apply-content__questions',
+            'form',
+            'section',
+            'main',
+          ].join(', '),
+        ) ??
+        button.parentElement;
+
+      if (
+        container &&
+        isVisible(container) &&
+        container.getBoundingClientRect().width > 240 &&
+        container.getBoundingClientRect().height > 160
+      ) {
+        candidates.add(container);
+      }
+    });
+
+  Array.from(document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea'))
+    .filter((field) => isVisible(field))
+    .forEach((field) => {
+      const context = firstNonEmpty(
+        field.getAttribute('aria-label'),
+        field.getAttribute('name'),
+        field.getAttribute('placeholder'),
+        textOf(field.closest('label')),
+        field.id ? textOf(document.querySelector(`label[for="${CSS.escape(field.id)}"]`)) : '',
+      );
+      if (!fieldPattern.test(context)) {
+        return;
+      }
+
+      const container =
+        field.closest<HTMLElement>(
+          [
+            '[role="dialog"]',
+            '.artdeco-modal',
+            '.artdeco-modal__content',
+            '.jobs-easy-apply-modal',
+            '.jobs-easy-apply-modal__content',
+            '.jobs-easy-apply-content',
+            '.jobs-easy-apply-content__questions',
+            'form',
+            'section',
+            'main',
+          ].join(', '),
+        ) ??
+        field.parentElement;
+
+      if (
+        container &&
+        isVisible(container) &&
+        container.getBoundingClientRect().width > 240 &&
+        container.getBoundingClientRect().height > 160
+      ) {
+        candidates.add(container);
+      }
+    });
+
+  return Array.from(candidates);
+};
+
+const getVisibleDialogCandidates = () => {
+  const selectors = [
+    '[role="dialog"]',
+    '.artdeco-modal',
+    '.artdeco-modal__content',
+    '.jobs-easy-apply-modal',
+    '.jobs-easy-apply-modal__content',
+    '.jobs-easy-apply-content',
+    '.jobs-easy-apply-content__questions',
+    '[class*="easy-apply"]',
+  ].join(', ');
+
+  return Array.from(
+    new Set([
+      ...Array.from(document.querySelectorAll<HTMLElement>(selectors)),
+      ...getHeuristicDialogContainers(),
+    ]),
+  ).filter(
+    (dialog) =>
+      isVisible(dialog) &&
+      dialog !== document.body &&
+      dialog !== document.documentElement &&
+      dialog.getBoundingClientRect().width > 240 &&
+      dialog.getBoundingClientRect().height > 160,
+  );
+};
 
 const getDialogFormControlsFor = (dialog: ParentNode) =>
   Array.from(
@@ -124,17 +246,47 @@ const getDialogTitle = (dialog: ParentNode) =>
   );
 
 const getPrimaryApplicationDialog = () => {
-  const dialogs = getVisibleDialogs();
+  const dialogs = getVisibleDialogCandidates();
 
   return (
     dialogs.sort((left, right) => {
+      const leftText = normalizeToken(textOf(left));
+      const rightText = normalizeToken(textOf(right));
+      const leftActionCount = Array.from(left.querySelectorAll<HTMLElement>('button, a, [role="button"]')).filter(
+        (button) =>
+          isVisible(button) &&
+          /next|review|continue|preview|submit|done|下一|继续|审核|预览|查看|提交|完成/.test(
+            buttonLabel(button),
+          ),
+      ).length;
+      const rightActionCount = Array.from(
+        right.querySelectorAll<HTMLElement>('button, a, [role="button"]'),
+      ).filter(
+        (button) =>
+          isVisible(button) &&
+          /next|review|continue|preview|submit|done|下一|继续|审核|预览|查看|提交|完成/.test(
+            buttonLabel(button),
+          ),
+      ).length;
       const leftScore =
+        (/easy apply|快速申请|contact info|联系方式|resume|additional questions|review|审核|提交申请|application submitted|已发送申请/.test(
+          leftText,
+        )
+          ? 5000
+          : 0) +
         getDialogFormControlsFor(left).length * 1000 +
-        left.querySelectorAll('button').length * 10 +
+        leftActionCount * 250 +
+        left.querySelectorAll('button, a, [role="button"]').length * 10 +
         left.getBoundingClientRect().width * left.getBoundingClientRect().height;
       const rightScore =
+        (/easy apply|快速申请|contact info|联系方式|resume|additional questions|review|审核|提交申请|application submitted|已发送申请/.test(
+          rightText,
+        )
+          ? 5000
+          : 0) +
         getDialogFormControlsFor(right).length * 1000 +
-        right.querySelectorAll('button').length * 10 +
+        rightActionCount * 250 +
+        right.querySelectorAll('button, a, [role="button"]').length * 10 +
         right.getBoundingClientRect().width * right.getBoundingClientRect().height;
 
       return rightScore - leftScore;
@@ -144,7 +296,7 @@ const getPrimaryApplicationDialog = () => {
 
 const getAuxiliaryDialogs = () => {
   const primary = getPrimaryApplicationDialog();
-  return getVisibleDialogs().filter((dialog) => dialog !== primary);
+  return getVisibleDialogCandidates().filter((dialog) => dialog !== primary);
 };
 
 const looksLikePreferenceOverlay = (value: string) => {
@@ -627,7 +779,15 @@ const extractJobFromCard = async (card: HTMLElement) => {
 const extractSelectedJobFromDetails = () => {
   const detailTopCardText = textOf(
     document.querySelector(
-      '.jobs-unified-top-card, .job-details-jobs-unified-top-card, .jobs-search__job-details--container',
+      [
+        '.jobs-unified-top-card',
+        '.job-details-jobs-unified-top-card',
+        '.jobs-search__job-details--container',
+        '.jobs-search__job-details',
+        '.job-view-layout',
+        '.scaffold-layout__detail',
+        'main',
+      ].join(', '),
     ),
   );
   const detailTopCardLines = detailTopCardText
@@ -637,7 +797,14 @@ const extractSelectedJobFromDetails = () => {
   const title = firstNonEmpty(
     textOf(
       document.querySelector(
-        '.job-details-jobs-unified-top-card__job-title, .jobs-unified-top-card__job-title, h1',
+        [
+          '.job-details-jobs-unified-top-card__job-title',
+          '.jobs-unified-top-card__job-title',
+          '.top-card-layout__title',
+          '[data-job-title]',
+          'main h1',
+          'h1',
+        ].join(', '),
       ),
     ),
     detailTopCardLines[0],
@@ -653,7 +820,15 @@ const extractSelectedJobFromDetails = () => {
   const company = firstNonEmpty(
     textOf(
       document.querySelector(
-        '.job-details-jobs-unified-top-card__company-name, .jobs-unified-top-card__company-name, .job-details-jobs-unified-top-card__primary-description, .jobs-unified-top-card__primary-description',
+        [
+          '.job-details-jobs-unified-top-card__company-name',
+          '.jobs-unified-top-card__company-name',
+          '.job-details-jobs-unified-top-card__primary-description',
+          '.jobs-unified-top-card__primary-description',
+          '.topcard__org-name-link',
+          '.topcard__flavor a',
+          'main a[href*="/company/"]',
+        ].join(', '),
       ),
     ),
     companyFromLine,
@@ -662,7 +837,12 @@ const extractSelectedJobFromDetails = () => {
   const location = firstNonEmpty(
     textOf(
       document.querySelector(
-        '.job-details-jobs-unified-top-card__tertiary-description, .jobs-unified-top-card__tertiary-description',
+        [
+          '.job-details-jobs-unified-top-card__tertiary-description',
+          '.jobs-unified-top-card__tertiary-description',
+          '.topcard__flavor--bullet',
+          '.topcard__flavor',
+        ].join(', '),
       ),
     ),
     locationFromLine,
@@ -678,9 +858,15 @@ const extractSelectedJobFromDetails = () => {
   );
   const externalJobId = getCurrentLinkedInJobId();
 
-  if (!externalJobId || !getVisibleEasyApplyButton()) {
+  if (!externalJobId) {
     return null;
   }
+
+  const easyApplySignal =
+    Boolean(getVisibleEasyApplyButton()) ||
+    /easy apply|快速申请|抢先申请/.test(normalizeToken(detailTopCardText)) ||
+    window.location.href.includes('/jobs/view/') ||
+    window.location.href.includes('currentJobId=');
 
   return {
     source: 'linkedin' as const,
@@ -690,9 +876,59 @@ const extractSelectedJobFromDetails = () => {
     location,
     url: `https://www.linkedin.com/jobs/view/${externalJobId}/`,
     description,
-    easyApply: true,
+    easyApply: easyApplySignal,
     detectedQuestions: [],
   };
+};
+
+const waitForCurrentSelectedLinkedInJob = async (timeoutMs = 10000) => {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const selectedDetailJob = extractSelectedJobFromDetails();
+    if (
+      selectedDetailJob &&
+      isUsableExtractedJob(selectedDetailJob, {
+        allowUnknownCompany: true,
+      })
+    ) {
+      return selectedDetailJob;
+    }
+
+    const selectedResultsJob = await extractSelectedJobFromResultsList();
+    if (
+      selectedResultsJob &&
+      isUsableExtractedJob(selectedResultsJob, {
+        allowUnknownCompany: true,
+      })
+    ) {
+      return selectedResultsJob;
+    }
+
+    await sleep(300);
+  }
+
+  const fallbackDetailJob = extractSelectedJobFromDetails();
+  if (
+    fallbackDetailJob &&
+    isUsableExtractedJob(fallbackDetailJob, {
+      allowUnknownCompany: true,
+    })
+  ) {
+    return fallbackDetailJob;
+  }
+
+  const fallbackResultsJob = await extractSelectedJobFromResultsList();
+  if (
+    fallbackResultsJob &&
+    isUsableExtractedJob(fallbackResultsJob, {
+      allowUnknownCompany: true,
+    })
+  ) {
+    return fallbackResultsJob;
+  }
+
+  return null;
 };
 
 const isUsableExtractedJob = (
@@ -764,13 +1000,33 @@ const getDialogFormControls = () => {
 };
 
 const setFieldValue = (element: HTMLInputElement | HTMLTextAreaElement, value: string) => {
-  const descriptor = Object.getOwnPropertyDescriptor(
-    Object.getPrototypeOf(element),
-    'value',
-  )?.set;
-  descriptor?.call(element, value);
-  element.dispatchEvent(new Event('input', { bubbles: true }));
+  const nextValue = value ?? '';
+  if (element instanceof HTMLInputElement) {
+    if (nativeInputValueSetter) {
+      nativeInputValueSetter.call(element, nextValue);
+    } else {
+      element.value = nextValue;
+    }
+  } else {
+    if (nativeTextAreaValueSetter) {
+      nativeTextAreaValueSetter.call(element, nextValue);
+    } else {
+      element.value = nextValue;
+    }
+  }
+
+  if ('setSelectionRange' in element) {
+    const end = nextValue.length;
+    try {
+      element.setSelectionRange(end, end);
+    } catch {
+      // Some input types do not support selection ranges.
+    }
+  }
+
+  element.dispatchEvent(new InputEvent('input', { bubbles: true, data: nextValue, inputType: 'insertText' }));
   element.dispatchEvent(new Event('change', { bubbles: true }));
+  element.dispatchEvent(new Event('blur', { bubbles: true }));
 };
 
 const getDialogScrollContainer = () => {
@@ -821,6 +1077,19 @@ const rewindDialogToTop = async () => {
     behavior: 'auto',
   });
   await sleep(250);
+};
+
+const scrollDialogToBottom = async () => {
+  const container = getDialogScrollContainer();
+  if (!container) {
+    return;
+  }
+
+  container.scrollTo({
+    top: container.scrollHeight,
+    behavior: 'auto',
+  });
+  await sleep(300);
 };
 
 const fillStandardFields = (profile: BootstrapPayload['profile']) => {
@@ -898,16 +1167,14 @@ const inferYearsAnswer = (context: string) => {
     return '';
   }
 
-  if (/python|tableau|sql|excel|metadata|virtualization|visualization|sdlc|etl/.test(normalized)) {
-    return '5';
-  }
-
-  if (/financial data management|fdm|data warehouse|warehousing|data model|data modelling|data modeling/.test(normalized)) {
-    return '1';
-  }
-
-  return '1';
+  return '8';
 };
+
+const looksLikeSuspiciousFullName = (value: string) =>
+  value.trim().split(/\s+/).length > 5 ||
+  /experience|specialize|specialise|product|growth|strategy|data|analyst|manager|lead|summary|profile|singapore|fintech|web3|,|\|/i.test(
+    value,
+  );
 
 const fillKnownTextFields = ({
   profile,
@@ -918,7 +1185,8 @@ const fillKnownTextFields = ({
   preference?: BootstrapPayload['preference'] | null;
   jobLocation: string;
 }) => {
-  const fullName = profile?.fullName?.trim() ?? '';
+  const rawFullName = profile?.fullName?.trim() ?? '';
+  const fullName = looksLikeSuspiciousFullName(rawFullName) ? '' : rawFullName;
   const [firstName = '', ...restNames] = fullName.split(/\s+/);
   const lastName = restNames.join(' ');
   const preferredLocation = getPreferredLocationValue({ profile, preference, jobLocation });
@@ -1057,7 +1325,61 @@ const isRequiredRadioGroup = (radios: HTMLInputElement[]) =>
     ),
   );
 
-const answerKnockoutQuestions = () => {
+const getFallbackFieldValue = ({
+  element,
+  profile,
+  preference,
+  jobLocation,
+}: {
+  element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+  profile: BootstrapPayload['profile'];
+  preference?: BootstrapPayload['preference'] | null;
+  jobLocation: string;
+}) => {
+  const context = getFieldContextText(element);
+  const preferredLocation = getPreferredLocationValue({ profile, preference, jobLocation });
+  const preferredSalary = getPreferredSalaryValue(preference);
+
+  if (/email/.test(context) && profile?.email) {
+    return profile.email;
+  }
+
+  if (/phone|mobile|telephone/.test(context) && profile?.phone) {
+    return profile.phone;
+  }
+
+  if (/location|city|地区|城市/.test(context) && preferredLocation) {
+    return preferredLocation;
+  }
+
+  if (/salary|compensation|pay|薪资|薪酬/.test(context)) {
+    return preferredSalary || '10000';
+  }
+
+  if (/notice/.test(context)) {
+    return '2';
+  }
+
+  if (/(years|experience|经验|多久)/.test(context)) {
+    return '8';
+  }
+
+  if (element instanceof HTMLInputElement && element.type === 'number') {
+    return '1';
+  }
+
+  return '1';
+};
+
+const answerKnockoutQuestions = ({
+  profile,
+  preference,
+  jobLocation,
+}: {
+  profile: BootstrapPayload['profile'];
+  preference?: BootstrapPayload['preference'] | null;
+  jobLocation: string;
+}) => {
   const controls = getDialogFormControls();
   const unansweredSelect = controls.find(
     (element): element is HTMLSelectElement =>
@@ -1118,11 +1440,41 @@ const answerKnockoutQuestions = () => {
     return normalizeDigits(element.value).length === 0 && element.value.trim().length === 0;
   });
 
+  unresolvedRequiredInputs.forEach((element) => {
+    if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement)) {
+      return;
+    }
+
+    const fallback = getFallbackFieldValue({
+      element,
+      profile,
+      preference,
+      jobLocation,
+    });
+    if (!fallback) {
+      return;
+    }
+
+    setFieldValue(element, fallback);
+  });
+
   const unresolvedRequiredRadioGroups = getRadioGroups().filter(
     (radios) => isRequiredRadioGroup(radios) && !radios.some((radio) => radio.checked),
   );
 
-  return unresolvedRequiredInputs.length === 0 && unresolvedRequiredRadioGroups.length === 0;
+  const stillUnresolvedInputs = controls.filter((element) => {
+    if (!isRequiredControl(element)) {
+      return false;
+    }
+
+    if (element instanceof HTMLInputElement && ['radio', 'checkbox', 'file'].includes(element.type)) {
+      return false;
+    }
+
+    return normalizeDigits(element.value).length === 0 && element.value.trim().length === 0;
+  });
+
+  return stillUnresolvedInputs.length === 0 && unresolvedRequiredRadioGroups.length === 0;
 };
 
 const fillCurrentStep = ({
@@ -1141,7 +1493,11 @@ const fillCurrentStep = ({
     jobLocation,
   });
 
-  return answerKnockoutQuestions();
+  return answerKnockoutQuestions({
+    profile,
+    preference,
+    jobLocation,
+  });
 };
 
 const walkDialogAndAnswerQuestions = async ({
@@ -1202,12 +1558,61 @@ const triggerButtonClick = (button: HTMLElement) => {
     block: 'center',
     inline: 'center',
   });
-  button.focus();
-  button.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
-  button.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-  button.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true }));
-  button.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-  button.click();
+  const rect = button.getBoundingClientRect();
+  const clientX = Math.round(rect.left + rect.width / 2);
+  const clientY = Math.round(rect.top + rect.height / 2);
+  const hitTarget =
+    (document.elementFromPoint(clientX, clientY) as HTMLElement | null)?.closest<HTMLElement>(
+      'button, a, [role="button"]',
+    ) ?? button;
+
+  hitTarget.focus();
+
+  const pointerInit: PointerEventInit = {
+    bubbles: true,
+    cancelable: true,
+    clientX,
+    clientY,
+    pointerId: 1,
+    pointerType: 'mouse',
+    isPrimary: true,
+  };
+  const mouseInit: MouseEventInit = {
+    bubbles: true,
+    cancelable: true,
+    clientX,
+    clientY,
+    button: 0,
+    buttons: 1,
+    view: window,
+  };
+
+  hitTarget.dispatchEvent(new MouseEvent('mouseover', mouseInit));
+  hitTarget.dispatchEvent(new MouseEvent('mousemove', mouseInit));
+  hitTarget.dispatchEvent(new PointerEvent('pointerover', pointerInit));
+  hitTarget.dispatchEvent(new PointerEvent('pointerenter', pointerInit));
+  hitTarget.dispatchEvent(new PointerEvent('pointerdown', pointerInit));
+  hitTarget.dispatchEvent(new MouseEvent('mousedown', mouseInit));
+  hitTarget.dispatchEvent(new PointerEvent('pointerup', pointerInit));
+  hitTarget.dispatchEvent(new MouseEvent('mouseup', mouseInit));
+  hitTarget.dispatchEvent(new MouseEvent('click', mouseInit));
+  HTMLElement.prototype.click.call(hitTarget);
+  hitTarget.dispatchEvent(
+    new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: 'Enter',
+      code: 'Enter',
+    }),
+  );
+  hitTarget.dispatchEvent(
+    new KeyboardEvent('keyup', {
+      bubbles: true,
+      cancelable: true,
+      key: 'Enter',
+      code: 'Enter',
+    }),
+  );
 };
 
 const getDialogProgressValue = () => {
@@ -1248,6 +1653,7 @@ const getDialogFingerprint = () => {
 
 const waitForDialogChange = async (previousFingerprint: string, timeoutMs = 3500) => {
   const startedAt = Date.now();
+  await sleep(400);
 
   while (Date.now() - startedAt < timeoutMs) {
     await sleep(250);
@@ -1288,7 +1694,7 @@ const classifyDialogAction = (button: HTMLElement) => {
   return 'ignore';
 };
 
-const clickPrimaryEasyApplyAction = () => {
+const findPrimaryEasyApplyAction = () => {
   const dialog = getEasyApplyDialog();
   if (!dialog) {
     return null;
@@ -1338,14 +1744,38 @@ const clickPrimaryEasyApplyAction = () => {
 
       return right.rect.left - left.rect.left;
     });
-  const target = ranked[0];
+  return ranked[0] ?? null;
+};
 
+const clickPrimaryEasyApplyAction = () => {
+  const target = findPreferredFlowAction() ?? findPrimaryEasyApplyAction();
   if (!target) {
     return null;
   }
 
   triggerButtonClick(target.button);
   return target;
+};
+
+const findPreferredFlowAction = () => {
+  const candidate = findPrimaryEasyApplyAction();
+  if (!candidate) {
+    return null;
+  }
+
+  const label = normalizeToken(candidate.label);
+  const preferredSequence = [
+    /^(next|下一页|下一步|continue|继续)$/i,
+    /^(review|预览|查看)$/i,
+    /^(submit application|submit|发送申请|提交申请|提交)$/i,
+    /^(done|完成|close|关闭)$/i,
+  ];
+
+  const sequenceIndex = preferredSequence.findIndex((pattern) => pattern.test(label));
+  return {
+    ...candidate,
+    sequenceIndex: sequenceIndex === -1 ? 99 : sequenceIndex,
+  };
 };
 
 const getVisibleEasyApplyButton = () => {
@@ -1739,7 +2169,11 @@ const processPlan = async ({
       preference,
       jobLocation: plan.job.location,
     });
-    if (!resolved) {
+    const actionCandidate = findPreferredFlowAction();
+    const canAdvanceDespiteHeuristics =
+      actionCandidate !== null && actionCandidate.kind !== 'submit' && actionCandidate.kind !== 'finish';
+
+    if (!resolved && !canAdvanceDespiteHeuristics) {
       await postReview(apiBaseUrl, plan.attempt.id, 'Unresolved required questions');
       await reportState({
         pendingReviewCount: 1,
@@ -1760,11 +2194,13 @@ const processPlan = async ({
       });
     }
 
+    await scrollDialogToBottom();
+
     const previousFingerprint = getDialogFingerprint();
     const action = clickPrimaryEasyApplyAction();
     const nextFingerprint = await waitForDialogChange(
       previousFingerprint,
-      action?.kind === 'submit' ? 4500 : 3000,
+      action?.kind === 'submit' ? 6500 : 5000,
     );
 
     if (!action) {
@@ -1784,12 +2220,17 @@ const processPlan = async ({
       break;
     }
 
+    const currentActionLabel = normalizeToken(action.label || '');
     await reportState({
       runStatus: 'running',
       recentResult:
-        action.kind === 'submit'
-          ? `Submitting ${plan.job.title} at ${plan.job.company}`
-          : `Advancing ${plan.job.title} at ${plan.job.company}`,
+        /submit|提交/.test(currentActionLabel)
+          ? `Clicking ${action.label || '提交申请'} for ${plan.job.title}`
+          : /review|查看|预览/.test(currentActionLabel)
+            ? `Clicking ${action.label || '查看'} for ${plan.job.title}`
+            : /done|完成|close|关闭/.test(currentActionLabel)
+              ? `Clicking ${action.label || '完成'} for ${plan.job.title}`
+              : `Clicking ${action.label || '下一页'} for ${plan.job.title}`,
     });
 
     if (action.kind === 'submit' && (hasSubmissionSuccessState() || !getEasyApplyDialog())) {
@@ -1817,7 +2258,8 @@ const processPlan = async ({
       };
     }
 
-    if (action.kind !== 'submit' && nextFingerprint === previousFingerprint) {
+    if (nextFingerprint === previousFingerprint) {
+      await scrollDialogToBottom();
       await walkDialogAndAnswerQuestions({
         profile,
         preference,
@@ -1828,7 +2270,7 @@ const processPlan = async ({
       const retryFingerprint = getDialogFingerprint();
       const retryAction = clickPrimaryEasyApplyAction();
       const retryNextFingerprint = retryAction
-        ? await waitForDialogChange(retryFingerprint, retryAction.kind === 'submit' ? 4500 : 3000)
+        ? await waitForDialogChange(retryFingerprint, retryAction.kind === 'submit' ? 6500 : 5000)
         : retryFingerprint;
 
       if (retryAction && retryNextFingerprint !== retryFingerprint) {
@@ -1839,9 +2281,22 @@ const processPlan = async ({
         continue;
       }
 
+      if (retryAction?.kind === 'submit' && hasSubmissionSuccessState()) {
+        await postStatus(apiBaseUrl, plan.attempt.id, 'submitted');
+        await postReceipt(apiBaseUrl, plan.attempt.id);
+        await dismissSuccessfulApplicationDialog();
+        await reportState({
+          dailySubmitted: 1,
+          recentResult: `Submitted ${plan.job.title} at ${plan.job.company}`,
+        });
+        return {
+          outcome: 'submitted',
+        };
+      }
+
       await reportState({
         runStatus: 'running',
-        recentResult: `Still waiting on the next step for ${plan.job.company}`,
+        recentResult: `Still waiting after clicking ${retryAction?.label || action.label || 'the primary action'} for ${plan.job.company}`,
       });
     }
   }
@@ -1915,171 +2370,66 @@ const runOnPage = async ({
 
   await reportState({
     runStatus: 'running',
-    recentResult: 'Scanning LinkedIn jobs page...',
+    recentResult: 'Preparing the selected LinkedIn job...',
   });
 
   const bootstrap = await fetchBootstrap(apiBaseUrl);
-  const searchResultsUrl = window.location.href;
-  const preferInlineSearchResultsFlow = isSearchResultsRoute() || getJobCards(1).length > 0;
   await reportState({
     runStatus: 'running',
-    recentResult: 'Waiting for LinkedIn results to finish loading...',
+    recentResult: 'Waiting for the selected LinkedIn job to finish loading...',
   });
 
-  const cards = await waitForJobCards(targetCount);
-  const jobs = [];
-  if (cards.length > 0) {
-    await reportState({
-      runStatus: 'running',
-      recentResult: `Found ${cards.length} LinkedIn job card${cards.length > 1 ? 's' : ''}.`,
-    });
-
-    for (const card of cards) {
-      const job = await extractJobFromCard(card);
-      if (!isUsableExtractedJob(job)) {
-        continue;
-      }
-
-      jobs.push(job);
-    }
+  const selectedJob = await waitForCurrentSelectedLinkedInJob();
+  if (!selectedJob) {
+    throw new Error(
+      `Could not resolve the selected LinkedIn job on this page. ${describeJobCardSurface()}`,
+    );
   }
 
-  if (jobs.length === 0) {
-    const selectedResultJob = await extractSelectedJobFromResultsList();
-    if (
-      selectedResultJob &&
-      isUsableExtractedJob(selectedResultJob, {
-        allowUnknownCompany: true,
-      }) &&
-      !jobs.some((job) => job.externalJobId === selectedResultJob.externalJobId)
-    ) {
-      jobs.push(selectedResultJob);
-      await reportState({
-        runStatus: 'running',
-        recentResult: `Using the selected results-list job: ${selectedResultJob.title}`,
-      });
-    }
-  }
-
-  if (jobs.length === 0) {
-    const selectedJob = extractSelectedJobFromDetails();
-    if (
-      selectedJob &&
-      isUsableExtractedJob(selectedJob, {
-        allowUnknownCompany: true,
-      }) &&
-      !jobs.some((job) => job.externalJobId === selectedJob.externalJobId)
-    ) {
-      jobs.push(selectedJob);
-      await reportState({
-        runStatus: 'running',
-        recentResult: `Using the selected LinkedIn job: ${selectedJob.title}`,
-      });
-    }
-  }
-
-  if (jobs.length === 0) {
-    throw new Error(`Could not extract valid LinkedIn jobs from this page. ${describeJobCardSurface()}`);
-  }
+  await reportState({
+    runStatus: 'running',
+    recentResult:
+      targetCount > 1
+        ? `Demo mode is applying only to the selected job: ${selectedJob.title}`
+        : `Using the selected LinkedIn job: ${selectedJob.title}`,
+  });
 
   const { run, plans } = await startServerRun({
     apiBaseUrl,
-    jobs,
-    targetCount,
+    jobs: [selectedJob],
+    targetCount: 1,
   });
-  let workerFailures = 0;
-  let workerFailureMessage = '';
 
   await reportState({
     activeRunId: run.id,
     runStatus: 'running',
-    recentResult: `Queued ${plans.length} LinkedIn jobs`,
+    recentResult: `Queued ${plans.length} LinkedIn job${plans.length === 1 ? '' : 's'}`,
   });
 
   if (plans.length === 0) {
     await reportState({
       runStatus: 'completed',
-      recentResult: 'No supported LinkedIn jobs were queued from this page.',
+      activeRunId: null,
+      recentResult: 'No supported LinkedIn job was queued from this page.',
     });
     return;
   }
 
-  for (const plan of plans) {
-    if (!runState.active || runState.paused) {
-      await reportState({
-        runStatus: 'paused',
-        recentResult: 'Run paused',
-      });
-      return;
-    }
-
-    const shouldStayInReview = plan.reviewReasons.some((reason) => reason.toLowerCase().includes('vip'));
-    if (shouldStayInReview) {
-      await processPlan({
-        plan,
-        apiBaseUrl,
-        profile: bootstrap.profile,
-        preference: bootstrap.preference,
-      });
-      continue;
-    }
-
-    if (preferInlineSearchResultsFlow) {
-      const restored = await restoreSearchResultsView(searchResultsUrl, targetCount);
-      if (!restored) {
-        await postReview(
-          apiBaseUrl,
-          plan.attempt.id,
-          `Could not restore the LinkedIn search results page. ${describeJobCardSurface()}`,
-        );
-        await reportState({
-          pendingReviewCount: 1,
-          recentResult: `Could not restore the search results page for ${plan.job.company}`,
-        });
-        continue;
-      }
-
-      await reportState({
-        runStatus: 'running',
-        recentResult: `Selecting ${plan.job.title} at ${plan.job.company}`,
-      });
-
-      const selected = await ensureJobSelectedOnPage({
-        externalJobId: plan.job.externalJobId,
-        title: plan.job.title,
-      });
-
-      if (!selected) {
-        await postReview(
-          apiBaseUrl,
-          plan.attempt.id,
-          `Could not focus ${plan.job.title} in the search results view. ${describeJobCardSurface()}`,
-        );
-        await reportState({
-          pendingReviewCount: 1,
-          recentResult: `Could not focus ${plan.job.title} in the search results view`,
-        });
-        continue;
-      }
-
-      await reportState({
-        runStatus: 'running',
-        recentResult: `Opening Easy Apply for ${plan.job.title} at ${plan.job.company}`,
-      });
-
-      await processPlan({
-        plan,
-        apiBaseUrl,
-        profile: bootstrap.profile,
-        preference: bootstrap.preference,
-        allowAttemptDespiteReview: true,
-      });
-      continue;
-    }
-
+  if (!runState.active || runState.paused) {
     await reportState({
+      activeRunId: null,
+      runStatus: 'paused',
+      recentResult: 'Run paused',
+    });
+    return;
+  }
+
+  const plan = plans[0]!;
+  if (/\/jobs\/search/.test(window.location.pathname)) {
+    await reportState({
+      activeRunId: run.id,
       runStatus: 'running',
-      recentResult: `Opening a worker tab for ${plan.job.title} at ${plan.job.company}`,
+      recentResult: `Opening ${plan.job.title} in a LinkedIn detail page`,
     });
 
     const response = (await sendRuntimeMessage({
@@ -2090,28 +2440,30 @@ const runOnPage = async ({
     } satisfies ExtensionMessage)) as { ok?: boolean; error?: string } | undefined;
 
     if (!response?.ok) {
-      workerFailures += 1;
-      workerFailureMessage = response?.error ?? `Worker tab failed for ${plan.job.company}`;
-      await postReview(
-        apiBaseUrl,
-        plan.attempt.id,
-        workerFailureMessage,
-      );
-      await reportState({
-        pendingReviewCount: 1,
-        recentResult: workerFailureMessage,
-      });
+      throw new Error(response?.error ?? `Could not open ${plan.job.title} in a worker tab.`);
     }
+
+    await reportState({
+      activeRunId: null,
+      runStatus: 'completed',
+      recentResult: 'Run completed',
+    });
+    return;
   }
 
-  if (workerFailures > 0) {
+  const outcome = await processPlan({
+    plan,
+    apiBaseUrl,
+    profile: bootstrap.profile,
+    preference: bootstrap.preference,
+    allowAttemptDespiteReview: true,
+  });
+
+  if (outcome.outcome !== 'submitted') {
     await reportState({
       activeRunId: null,
       runStatus: 'failed',
-      recentResult:
-        workerFailures === 1
-          ? workerFailureMessage
-          : `${workerFailures} jobs were sent to review before ApplyPilot could open their worker tabs.`,
+      recentResult: outcome.reason,
     });
     return;
   }
@@ -2121,6 +2473,57 @@ const runOnPage = async ({
     runStatus: 'completed',
     recentResult: 'Run completed',
   });
+};
+
+const maybeResumePendingWorkerPlan = async () => {
+  if (contentScriptWindow.__applypilotLinkedInAutoResumeStarted) {
+    return;
+  }
+  contentScriptWindow.__applypilotLinkedInAutoResumeStarted = true;
+
+  try {
+    const pending = (await sendRuntimeMessage<{
+      ok?: boolean;
+      apiBaseUrl?: string;
+      plan?: JobPlan;
+    }>({
+      type: 'applypilot:get-pending-worker-plan',
+    } satisfies ExtensionMessage)) as
+      | { ok?: boolean; apiBaseUrl?: string; plan?: JobPlan }
+      | undefined;
+
+    if (!pending?.ok || !pending.apiBaseUrl || !pending.plan) {
+      return;
+    }
+
+    await reportState({
+      runStatus: 'running',
+      recentResult: `Continuing ${pending.plan.job.title} on LinkedIn`,
+    });
+
+    await executePlanOnCurrentPage({
+      apiBaseUrl: pending.apiBaseUrl,
+      plan: pending.plan,
+    });
+
+    await sendRuntimeMessage({
+      type: 'applypilot:worker-plan-finished',
+      status: 'completed',
+    } satisfies ExtensionMessage);
+  } catch (error) {
+    const messageText =
+      error instanceof Error ? error.message : 'LinkedIn worker run failed unexpectedly.';
+
+    try {
+      await sendRuntimeMessage({
+        type: 'applypilot:worker-plan-finished',
+        status: 'failed',
+        error: messageText,
+      } satisfies ExtensionMessage);
+    } catch {
+      // Keep the worker tab visible for manual recovery if the background channel tears down.
+    }
+  }
 };
 
 if (!contentScriptWindow.__applypilotLinkedInListenerRegistered) {
@@ -2150,6 +2553,32 @@ if (!contentScriptWindow.__applypilotLinkedInListenerRegistered) {
           recentResult: messageText,
         });
           sendResponse({ ok: false, error: messageText });
+        }
+        return;
+      }
+
+      if (message.type === 'applypilot:collect-current-job-on-page') {
+        try {
+          const selectedJob = await waitForCurrentSelectedLinkedInJob();
+          if (!selectedJob) {
+            sendResponse({
+              ok: false,
+              error: `Could not resolve the selected LinkedIn job on this page. ${describeJobCardSurface()}`,
+            });
+            return;
+          }
+
+          sendResponse({
+            ok: true,
+            job: selectedJob,
+          });
+        } catch (error) {
+          const messageText =
+            error instanceof Error ? error.message : 'Could not read the selected LinkedIn job.';
+          sendResponse({
+            ok: false,
+            error: messageText,
+          });
         }
         return;
       }
@@ -2188,3 +2617,5 @@ if (!contentScriptWindow.__applypilotLinkedInListenerRegistered) {
     return true;
   });
 }
+
+void maybeResumePendingWorkerPlan();
