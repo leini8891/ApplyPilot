@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true,
+    "jsx": "preserve",
+    "baseUrl": ".",
+    "paths": {
+      "@applypilot/domain": ["packages/domain/src/index.ts"],
+      "@applypilot/domain/*": ["packages/domain/src/*"],
+      "@applypilot/ui": ["packages/ui/src/index.ts"],
+      "@applypilot/ui/*": ["packages/ui/src/*"],
+      "@applypilot/config": ["packages/config/src/index.ts"],
+      "@applypilot/config/*": ["packages/config/src/*"]
+    }
+  }
+}
+
