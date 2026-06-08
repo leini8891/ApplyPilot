@@ -132,12 +132,14 @@ const getActiveSupportedTab = async () => {
 
 const startRunOnCurrentPage = async ({
   activeTabId,
+  targetCount,
 }: {
   activeTabId: number;
+  targetCount: number;
 }) => {
   const response = await sendMessageToTab<{ ok?: boolean; error?: string }>(activeTabId, {
     type: 'applypilot:start-run-on-page',
-    targetCount: 1,
+    targetCount,
     apiBaseUrl: extensionEnv.VITE_API_BASE_URL,
     sourceTabId: activeTabId,
   } satisfies ExtensionMessage);
@@ -151,12 +153,15 @@ const startRunOnCurrentPage = async ({
 
 const startLocalRunWithRetry = async ({
   activeTabId,
+  targetCount,
 }: {
   activeTabId: number;
+  targetCount: number;
 }) => {
   try {
     await startRunOnCurrentPage({
       activeTabId,
+      targetCount,
     });
   } catch (error) {
     if (!shouldReloadJobSiteTab(error)) {
@@ -171,6 +176,7 @@ const startLocalRunWithRetry = async ({
     await waitForTabComplete(activeTabId);
     await startRunOnCurrentPage({
       activeTabId,
+      targetCount,
     });
   }
 };
@@ -440,22 +446,25 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendRe
           return;
         }
         const activeTabId = activeTab?.id;
-        const activeTabUrl = activeTab?.url ?? '';
 
         if (activeTabId === undefined) {
           sendResponse({ ok: false, error: 'Could not resolve the active job-site tab.' });
           return;
         }
 
+        const targetCount = Math.max(1, Math.min(50, Math.round(message.targetCount || 1)));
+
         await saveState({
           runStatus: 'running',
           pendingReviewCount: 0,
-          recentResult: 'Preparing application run',
+          recentResult:
+            targetCount > 1 ? `Preparing batch run for up to ${targetCount} jobs` : 'Preparing application run',
         });
 
         try {
           await startLocalRunWithRetry({
             activeTabId,
+            targetCount,
           });
         } catch (error) {
           const messageText =

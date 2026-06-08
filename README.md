@@ -32,11 +32,24 @@ ApplyPilot is a LinkedIn-first job application copilot built as a `pnpm` monorep
 - The extension never stores LinkedIn credentials.
 - Cover letter generation is feature-flagged out of the first release.
 
+## Batch Apply
+
+- Open a LinkedIn jobs **search results** page (e.g. filtered to your target roles and Singapore).
+- Set **Run target** in the popup to the number of applications you want this run (1–50).
+- Press **Start run**. ApplyPilot walks down the results list, selecting each job, completing the
+  Easy Apply flow, and continuing to the next until the target is reached or the list is exhausted
+  (it scrolls to load more and advances to the next results page automatically).
+- VIP companies, non-Easy-Apply roles, and jobs with risky/unanswerable questions are routed to the
+  review queue instead of being auto-submitted. Submitted and review counts update live in the popup.
+- A run target of `1`, or starting from a single job detail page, applies only to the selected job.
+
 ## Manual Acceptance
 
 - Upload a PDF or DOCX resume and inspect parsed profile output.
 - Save job preferences and VIP companies.
-- Start a LinkedIn run and verify review routing for unsupported jobs.
+- Start a single-job LinkedIn run and verify review routing for unsupported jobs.
+- Start a batch run (target > 1) on a search results page and confirm it applies to multiple jobs
+  in sequence and stops at the target.
 - Confirm dashboard records applications, receipts, and interview notes.
 
 ## Commands
