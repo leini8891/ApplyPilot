@@ -142,7 +142,10 @@ export function PopupApp() {
       <div className="hero">
         <p className="hero-eyebrow">ApplyPilot</p>
         <h1>Visible application runs</h1>
-        <p>Queue roles from the current page, keep risky jobs in review, and push results back to the dashboard.</p>
+        <p>
+          Open a LinkedIn jobs search, set a target, and ApplyPilot works down the results list. Risky and
+          VIP roles are routed to review instead of auto-submitted.
+        </p>
       </div>
 
       <div className="popup-grid">
@@ -161,7 +164,7 @@ export function PopupApp() {
       </div>
 
       <label className="popup-field">
-        <span>Run target</span>
+        <span>Run target (jobs to apply this run)</span>
         <input
           max={50}
           min={1}

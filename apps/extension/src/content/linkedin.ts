@@ -2356,6 +2356,180 @@ const executePlanOnCurrentPage = async ({
   }
 };
 
+const getCardIdentity = (card: HTMLElement) =>
+  card.getAttribute('data-job-id') ??
+  card.getAttribute('data-occludable-job-id') ??
+  getPrimaryJobLink(card)?.href ??
+  '';
+
+const getSearchResultsScrollContainer = () =>
+  document.querySelector<HTMLElement>(
+    [
+      '.jobs-search-results-list',
+      '.scaffold-layout__list',
+      '.scaffold-layout__list-detail-container .scaffold-layout__list',
+      'div.jobs-search-results-list',
+    ].join(', '),
+  ) ?? null;
+
+const loadMoreSearchResults = async () => {
+  const before = getJobCards(200).length;
+  const cards = getJobCards(200);
+  const lastCard = cards[cards.length - 1];
+  lastCard?.scrollIntoView({ block: 'end', inline: 'nearest' });
+
+  const container = getSearchResultsScrollContainer();
+  if (container) {
+    container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
+  }
+
+  await sleep(1400);
+  return getJobCards(200).length > before;
+};
+
+const goToNextSearchPage = async () => {
+  const nextButton = Array.from(
+    document.querySelectorAll<HTMLElement>(
+      [
+        'button[aria-label="View next page"]',
+        'button.jobs-search-pagination__button--next',
+        'button.artdeco-pagination__button--next',
+        'li.artdeco-pagination__indicator--number + li button',
+      ].join(', '),
+    ),
+  ).find((button) => isVisible(button) && !isButtonDisabled(button));
+
+  if (!nextButton) {
+    return false;
+  }
+
+  triggerButtonClick(nextButton);
+  await sleep(1600);
+  const cards = await waitForJobCards(1);
+  return cards.length > 0;
+};
+
+const runBatchOnSearchResults = async ({
+  apiBaseUrl,
+  targetCount,
+  bootstrap,
+}: {
+  apiBaseUrl: string;
+  targetCount: number;
+  bootstrap: BootstrapPayload;
+}) => {
+  const processedCardIds = new Set<string>();
+  let submitted = 0;
+  let routedToReview = 0;
+  let processed = 0;
+  let emptyScans = 0;
+
+  await reportState({
+    runStatus: 'running',
+    recentResult: `Scanning LinkedIn results for up to ${targetCount} applications...`,
+  });
+
+  while (submitted < targetCount && runState.active && !runState.paused) {
+    const freshCards = getJobCards(200).filter((card) => {
+      const id = getCardIdentity(card);
+      return id.length > 0 && !processedCardIds.has(id);
+    });
+
+    if (freshCards.length === 0) {
+      const grew = await loadMoreSearchResults();
+      if (grew) {
+        emptyScans = 0;
+        continue;
+      }
+
+      emptyScans += 1;
+      if (emptyScans >= 2) {
+        const advanced = await goToNextSearchPage();
+        if (!advanced) {
+          break;
+        }
+        emptyScans = 0;
+      }
+      continue;
+    }
+
+    emptyScans = 0;
+
+    for (const card of freshCards) {
+      if (submitted >= targetCount || !runState.active || runState.paused) {
+        break;
+      }
+
+      processedCardIds.add(getCardIdentity(card));
+
+      await clickIntoJobCard(card);
+      const job =
+        (await waitForCurrentSelectedLinkedInJob(6000)) ?? (await extractJobFromCard(card));
+      if (!job || !isUsableExtractedJob(job, { allowUnknownCompany: true })) {
+        continue;
+      }
+
+      processed += 1;
+      await reportState({
+        runStatus: 'running',
+        recentResult: `(${submitted}/${targetCount}) Reviewing ${job.title} at ${job.company}`,
+      });
+
+      let plan: JobPlan | undefined;
+      try {
+        const serverRun = await startServerRun({
+          apiBaseUrl,
+          jobs: [job],
+          targetCount: 1,
+        });
+        plan = serverRun.plans[0];
+      } catch (error) {
+        await reportState({
+          runStatus: 'running',
+          recentResult: `Skipped ${job.company}: ${
+            error instanceof Error ? error.message : 'could not queue this job'
+          }`,
+        });
+        continue;
+      }
+
+      if (!plan) {
+        continue;
+      }
+
+      // Honor review routing in batch mode: VIP, non-Easy-Apply and risky roles
+      // are sent to the review queue instead of being auto-submitted.
+      const outcome = await processPlan({
+        plan,
+        apiBaseUrl,
+        profile: bootstrap.profile,
+        preference: bootstrap.preference,
+        allowAttemptDespiteReview: false,
+      });
+
+      if (outcome.outcome === 'submitted') {
+        submitted += 1;
+        await reportState({
+          runStatus: 'running',
+          recentResult: `Submitted ${submitted}/${targetCount}: ${job.title} at ${job.company}`,
+        });
+      } else {
+        routedToReview += 1;
+      }
+
+      // Gentle, slightly randomized pacing between applications.
+      await sleep(2500 + Math.floor(Math.random() * 2000));
+    }
+  }
+
+  const summary = `Batch finished: ${submitted} submitted, ${routedToReview} routed to review, ${processed} reviewed.`;
+  await reportState({
+    activeRunId: null,
+    runStatus: runState.paused ? 'paused' : 'completed',
+    recentResult: runState.paused ? `Paused. ${summary}` : summary,
+  });
+};
+
 const runOnPage = async ({
   apiBaseUrl,
   targetCount,
@@ -2368,12 +2542,21 @@ const runOnPage = async ({
   runState.active = true;
   runState.paused = false;
 
-  await reportState({
-    runStatus: 'running',
-    recentResult: 'Preparing the selected LinkedIn job...',
-  });
-
   const bootstrap = await fetchBootstrap(apiBaseUrl);
+
+  // Batch mode: when the user asks for more than one application and we are on a
+  // LinkedIn search-results page, iterate across the result cards instead of
+  // applying only to the single selected job.
+  if (targetCount > 1 && isSearchResultsRoute()) {
+    await waitForJobCards(1);
+    await runBatchOnSearchResults({
+      apiBaseUrl,
+      targetCount,
+      bootstrap,
+    });
+    return;
+  }
+
   await reportState({
     runStatus: 'running',
     recentResult: 'Waiting for the selected LinkedIn job to finish loading...',
