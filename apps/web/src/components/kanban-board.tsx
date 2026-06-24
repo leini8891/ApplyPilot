@@ -92,6 +92,7 @@ export function KanbanBoard({ items }: KanbanBoardProps) {
                     value={attempt.status}
                   >
                     {[
+                      'drafted',
                       'queued',
                       'submitted',
                       'needs_review',

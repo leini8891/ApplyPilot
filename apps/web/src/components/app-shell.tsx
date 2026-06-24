@@ -8,6 +8,7 @@ const navItems = [
   { href: '/runs', label: 'Automation Lab' },
   { href: '/applications', label: 'Applications' },
   { href: '/interviews', label: 'Interviews' },
+  { href: '/knowledge-base', label: 'Knowledge Base' },
 ];
 
 export function AppShell({ children }: PropsWithChildren) {

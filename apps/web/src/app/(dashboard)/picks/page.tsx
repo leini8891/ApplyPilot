@@ -116,6 +116,81 @@ export default async function DailyPicksPage() {
                   </div>
                 </div>
 
+                {pick.knowledgeMatches.length > 0 ? (
+                  <div className="prep-match-list">
+                    <h3>Prep assets</h3>
+                    {pick.resumeMatches.map((match) => (
+                      <article className="prep-match-row" key={`${match.sourceLabel}-${match.title}`}>
+                        <div>
+                          <p className="panel-eyebrow">{match.sourceLabel}</p>
+                          <h4>{match.title}</h4>
+                          <p className="muted-copy">{match.reason}</p>
+                        </div>
+                        <ul className="signal-list">
+                          {match.highlights.map((highlight) => (
+                            <li className="signal-positive" key={highlight}>
+                              {highlight}
+                            </li>
+                          ))}
+                        </ul>
+                        <div className="tag-row">
+                          {match.tags.map((tag) => (
+                            <span className="tag" key={tag}>
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      </article>
+                    ))}
+                    {pick.knowledgeMatches.map((match) => (
+                      <article className="prep-match-row" key={match.relativePath}>
+                        <div>
+                          <p className="panel-eyebrow">{match.kindLabel}</p>
+                          <h4>{match.title}</h4>
+                          <p className="muted-copy">{match.reason}</p>
+                        </div>
+                        {match.answerPoints.length > 0 ? (
+                          <ul className="signal-list">
+                            {match.answerPoints.map((point) => (
+                              <li className="signal-positive" key={point}>
+                                {point}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                        <div className="tag-row">
+                          {match.tags.map((tag) => (
+                            <span className="tag" key={tag}>
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                        <p className="knowledge-source">{match.relativePath}</p>
+                      </article>
+                    ))}
+                  </div>
+                ) : pick.resumeMatches.length > 0 ? (
+                  <div className="prep-match-list">
+                    <h3>Resume evidence</h3>
+                    {pick.resumeMatches.map((match) => (
+                      <article className="prep-match-row" key={`${match.sourceLabel}-${match.title}`}>
+                        <div>
+                          <p className="panel-eyebrow">{match.sourceLabel}</p>
+                          <h4>{match.title}</h4>
+                          <p className="muted-copy">{match.reason}</p>
+                        </div>
+                        <ul className="signal-list">
+                          {match.highlights.map((highlight) => (
+                            <li className="signal-positive" key={highlight}>
+                              {highlight}
+                            </li>
+                          ))}
+                        </ul>
+                      </article>
+                    ))}
+                  </div>
+                ) : null}
+
                 <div className="pick-footer">
                   <a className="primary-button" href={pick.job.url} rel="noreferrer" target="_blank">
                     Open role

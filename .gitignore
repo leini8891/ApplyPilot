@@ -1,6 +1,7 @@
 .DS_Store
 .codex/
 .idea/
+local_workspace/
 .env
 .env.local
 .env.*.local
@@ -12,4 +13,11 @@ playwright-report
 test-results
 *.log
 supabase/.branches
+__pycache__/
+*.pyc
+tmp/
+output/
+.codex_tmp/
+.codex_tmp_*.png
+.tmp_*.js
 *.tsbuildinfo
