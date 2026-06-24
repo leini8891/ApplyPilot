@@ -1,0 +1,28 @@
+{
+  "name": "applypilot",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.6.5",
+  "scripts": {
+    "dev:web": "pnpm --filter @applypilot/web dev",
+    "dev:extension": "pnpm --filter @applypilot/extension dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "check": "pnpm lint && pnpm test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.53.0",
+    "@types/chrome": "^0.0.330",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "eslint": "^9.28.0",
+    "eslint-config-next": "^15.3.2",
+    "jsdom": "^26.1.0",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.4"
+  }
+}

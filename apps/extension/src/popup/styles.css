@@ -1,0 +1,129 @@
+:root {
+  color-scheme: light;
+  --bg: #f4ecdf;
+  --card: rgba(255, 251, 243, 0.95);
+  --line: rgba(71, 44, 14, 0.14);
+  --text: #26180e;
+  --muted: #745b48;
+  --accent: #1b6b5c;
+  --accent-dark: #114a40;
+}
+
+body {
+  margin: 0;
+  min-width: 360px;
+  font-family: 'Avenir Next', 'Segoe UI', sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(circle at top right, rgba(27, 107, 92, 0.18), transparent 30%),
+    linear-gradient(180deg, #f7f1e5 0%, #f1e6d4 100%);
+}
+
+.popup-root {
+  padding: 18px;
+  display: grid;
+  gap: 16px;
+}
+
+.hero {
+  padding: 18px;
+  border-radius: 22px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: 0 18px 42px rgba(85, 56, 19, 0.14);
+}
+
+.hero h1 {
+  margin: 0 0 8px;
+  font-size: 1.4rem;
+}
+
+.hero p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.hero-eyebrow {
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+  font-size: 0.74rem;
+}
+
+.popup-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.metric-card,
+.status-panel {
+  padding: 14px;
+  border-radius: 18px;
+  background: var(--card);
+  border: 1px solid var(--line);
+}
+
+.metric-card span,
+.status-panel p {
+  color: var(--muted);
+}
+
+.metric-card strong,
+.status-panel strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 1.4rem;
+}
+
+.popup-field {
+  display: grid;
+  gap: 8px;
+}
+
+.popup-field span {
+  color: var(--muted);
+}
+
+.popup-field input {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  padding: 12px;
+  background: rgba(255, 250, 242, 0.8);
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.actions button,
+.dashboard-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 12px 16px;
+  border: none;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.actions .primary {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+  color: white;
+}
+
+.actions .secondary,
+.dashboard-link {
+  background: rgba(27, 107, 92, 0.08);
+  color: var(--accent);
+}
+
+.popup-error {
+  color: #9f2d24;
+  margin: 0;
+}
