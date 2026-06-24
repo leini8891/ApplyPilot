@@ -8,6 +8,7 @@ import {
   isWithinDailyQuota,
   normalizeMatchScore,
   needsReviewRouting,
+  parseSalaryUpperBound,
   scoreJobAgainstPreferences,
 } from './index';
 
@@ -19,8 +20,38 @@ describe('domain helpers', () => {
 
   it('scores jobs using profile and preferences', () => {
     const score = scoreJobAgainstPreferences(demoCandidateProfile, demoPreferences, demoJobs[0]);
-    expect(score.overall).toBeGreaterThan(50);
+    expect(score.overall).toBeGreaterThan(70);
     expect(score.recommendedAction).toBe('apply');
+    expect(score.reasons.some((reason) => reason.includes('priority keywords'))).toBe(true);
+  });
+
+  it('routes strong matches to review when application friction conflicts with preferences', () => {
+    const score = scoreJobAgainstPreferences(demoCandidateProfile, demoPreferences, {
+      ...demoJobs[0],
+      id: 'manual_payments_role',
+      easyApply: false,
+    });
+
+    expect(score.overall).toBeGreaterThan(55);
+    expect(score.recommendedAction).toBe('review');
+    expect(score.gaps).toContain('Manual application flow');
+  });
+
+  it('penalizes roles that appear below the saved salary floor', () => {
+    const score = scoreJobAgainstPreferences(demoCandidateProfile, demoPreferences, {
+      ...demoJobs[0],
+      id: 'low_salary_payments_role',
+      salaryText: 'SGD 90k - 110k',
+    });
+
+    expect(score.recommendedAction).toBe('review');
+    expect(score.gaps).toContain('Salary may be below SGD 140000');
+  });
+
+  it('parses common salary range formats', () => {
+    expect(parseSalaryUpperBound('SGD 160k - 190k')).toBe(190000);
+    expect(parseSalaryUpperBound('$120,000 - $150,000')).toBe(150000);
+    expect(parseSalaryUpperBound(null)).toBeNull();
   });
 
   it('routes VIP companies and weak knockout flows to review', () => {

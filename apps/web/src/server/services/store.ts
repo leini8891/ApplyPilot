@@ -253,11 +253,17 @@ const createLocalObjectUrl = (path: string | null) =>
     : null;
 
 const useDemoData = env.ENABLE_DEMO_DATA;
+const savedJobsRunPrefix = 'run_saved_jobs';
 
 const listFromMemory = <T>(items: T[]) => clone(items);
 
 const findRunIdsForCandidate = (candidateId: string, runs: ApplicationRun[]) =>
   new Set(runs.filter((run) => run.candidateId === candidateId).map((run) => run.id));
+
+const isTrackerSyncRun = (run: ApplicationRun) => run.id.startsWith(`${savedJobsRunPrefix}_`);
+
+const sortRunsByStartedAtDesc = (runs: ApplicationRun[]) =>
+  runs.sort((left, right) => right.startedAt.localeCompare(left.startedAt));
 
 const fallbackWarnings = new Set<string>();
 
@@ -675,7 +681,9 @@ export const store = {
       }
     }
 
-    return listFromMemory(memoryStore.runs).filter((run) => run.candidateId === candidateId);
+    return sortRunsByStartedAtDesc(
+      listFromMemory(memoryStore.runs).filter((run) => run.candidateId === candidateId),
+    );
   },
   async saveAttempt(attempt: ApplicationAttempt) {
     const supabase = getSupabaseAdminClient();
@@ -871,10 +879,12 @@ export const store = {
       this.listRuns(candidateId),
     ]);
 
+    const workflowRuns = runs.filter((run) => !isTrackerSyncRun(run));
+
     return buildDashboardSummary({
       attempts,
       dailyTarget: preference?.dailyTarget ?? 25,
-      runStatus: runs[0]?.status ?? 'idle',
+      runStatus: workflowRuns[0]?.status ?? 'idle',
     });
   },
   async getDashboardSnapshot(candidateId: string) {
@@ -895,7 +905,7 @@ export const store = {
       profile,
       resumes,
       preference,
-      runs,
+      runs: runs.filter((run) => !isTrackerSyncRun(run)),
       attempts,
       reviews,
       interviews,

@@ -45,7 +45,7 @@ export function ManualJobForm() {
       return;
     }
 
-    setStatus('Role saved to your pool.');
+    setStatus('Role saved to your pool and application tracker.');
     setFormState({
       source: formState.source,
       title: '',

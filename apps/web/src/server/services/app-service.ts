@@ -7,6 +7,7 @@ import {
   type JobPosting,
   type JobPreference,
   type MatchScore,
+  type ResumeVersion,
   jobPreferenceSchema,
   needsReviewRouting,
   scoreJobAgainstPreferences,
@@ -17,6 +18,11 @@ import {
 import { shortId, slugify } from '@/lib/utils';
 
 import { generateTailoredResumeWithAi, parseCandidateProfileWithAi, scoreJobWithAi } from './ai';
+import {
+  getKnowledgeBaseEntries,
+  matchKnowledgeEntriesForJob,
+  type KnowledgeMatch,
+} from './knowledge-base';
 import { renderTailoredResumePdf } from './resume-pdf';
 import { extractResumeText } from './resume';
 import { store } from './store';
@@ -28,6 +34,23 @@ const syntheticJobUrls = new Set([
   'https://www.linkedin.com/jobs/view/56789/',
   'https://www.linkedin.com/jobs/view/999/',
 ]);
+const savedJobsRunPrefix = 'run_saved_jobs';
+const dailyPickHiddenStatuses = new Set<ApplicationAttempt['status']>([
+  'submitted',
+  'viewed',
+  'interview',
+  'offer',
+  'rejected',
+  'failed',
+]);
+
+export type ResumeMaterialMatch = {
+  title: string;
+  sourceLabel: string;
+  reason: string;
+  highlights: string[];
+  tags: string[];
+};
 
 export type DailyPick = {
   job: JobPosting;
@@ -36,6 +59,8 @@ export type DailyPick = {
   watchouts: string[];
   sourceLabel: string;
   freshnessLabel: string;
+  resumeMatches: ResumeMaterialMatch[];
+  knowledgeMatches: KnowledgeMatch[];
 };
 
 export type DailyPicksSnapshot = {
@@ -202,6 +227,159 @@ const isSyntheticJob = (job: JobPosting) =>
   syntheticJobUrls.has(job.url) ||
   ['12345', '56789', '999'].includes(job.externalJobId);
 
+const normalizeMaterialText = (value: string) =>
+  value
+    .toLowerCase()
+    .split(/[^a-z0-9+#]+/i)
+    .filter(Boolean)
+    .join(' ');
+
+const materialTermMatches = (haystack: string, value: string) => {
+  const normalized = normalizeMaterialText(value);
+
+  if (!normalized) {
+    return false;
+  }
+
+  if (` ${haystack} `.includes(` ${normalized} `)) {
+    return true;
+  }
+
+  const haystackTokens = new Set(haystack.split(' ').filter(Boolean));
+  const tokens = normalized.split(' ').filter(Boolean);
+
+  return tokens.length > 0 && tokens.every((token) => haystackTokens.has(token));
+};
+
+const uniqueStrings = (items: string[]) => {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+
+  items.forEach((item) => {
+    const normalized = item.trim();
+    const key = normalized.toLowerCase();
+
+    if (!normalized || seen.has(key)) {
+      return;
+    }
+
+    seen.add(key);
+    unique.push(normalized);
+  });
+
+  return unique;
+};
+
+const buildResumeSearchTerms = (job: JobPosting, score: MatchScore) =>
+  uniqueStrings([
+    ...score.keywordHits,
+    ...job.title.split(/[^a-z0-9+#]+/i).filter((term) => term.length > 2),
+    ...job.description.split(/[^a-z0-9+#]+/i).filter((term) => term.length > 4).slice(0, 20),
+  ]).slice(0, 32);
+
+const scoreMaterial = (text: string, terms: string[]) => {
+  const haystack = normalizeMaterialText(text);
+  const matchedTerms = terms.filter((term) => materialTermMatches(haystack, term));
+
+  return {
+    matchedTerms,
+    score: matchedTerms.length,
+  };
+};
+
+const splitResumeSnippets = (text: string) =>
+  text
+    .split(/(?:\r?\n|(?<=[.!?])\s+)/)
+    .map((snippet) => snippet.trim())
+    .filter((snippet) => snippet.length >= 24);
+
+export const matchResumeMaterialsForJob = ({
+  profile,
+  resumes,
+  job,
+  score,
+  limit = 3,
+}: {
+  profile: CandidateProfile;
+  resumes: ResumeVersion[];
+  job: JobPosting;
+  score: MatchScore;
+  limit?: number;
+}): ResumeMaterialMatch[] => {
+  const terms = buildResumeSearchTerms(job, score);
+  const matches: Array<ResumeMaterialMatch & { scoreValue: number }> = [];
+  const matchedSkills = profile.skills.filter((skill) =>
+    materialTermMatches(normalizeMaterialText(`${job.title} ${job.description}`), skill),
+  );
+
+  if (matchedSkills.length > 0) {
+    matches.push({
+      title: 'Parsed profile skills',
+      sourceLabel: 'Resume profile',
+      reason: `Matched saved skills: ${matchedSkills.slice(0, 4).join(', ')}`,
+      highlights: matchedSkills.slice(0, 5),
+      tags: matchedSkills.slice(0, 4),
+      scoreValue: matchedSkills.length + 1,
+    });
+  }
+
+  profile.workExperiences.forEach((experience) => {
+    const highlights = [experience.summary, ...experience.achievements].filter(Boolean);
+    const material = [
+      experience.company,
+      experience.title,
+      experience.summary,
+      experience.achievements.join(' '),
+    ].join(' ');
+    const scored = scoreMaterial(material, terms);
+
+    if (scored.score === 0) {
+      return;
+    }
+
+    const matchedHighlights = highlights.filter((highlight) => scoreMaterial(highlight, terms).score > 0);
+
+    matches.push({
+      title: `${experience.title} at ${experience.company}`,
+      sourceLabel: 'Resume experience',
+      reason: `Matched resume terms: ${scored.matchedTerms.slice(0, 4).join(', ')}`,
+      highlights: (matchedHighlights.length > 0 ? matchedHighlights : highlights).slice(0, 3),
+      tags: scored.matchedTerms.slice(0, 4),
+      scoreValue: scored.score + matchedHighlights.length,
+    });
+  });
+
+  resumes.forEach((resume) => {
+    const snippets = splitResumeSnippets(resume.textContent);
+    const matchedSnippets = snippets.filter((snippet) => scoreMaterial(snippet, terms).score > 0);
+    const scored = scoreMaterial(resume.textContent, terms);
+
+    if (matchedSnippets.length === 0 || scored.score === 0) {
+      return;
+    }
+
+    matches.push({
+      title: resume.label,
+      sourceLabel: 'Resume text',
+      reason: `Matched resume text: ${scored.matchedTerms.slice(0, 4).join(', ')}`,
+      highlights: matchedSnippets.slice(0, 3),
+      tags: scored.matchedTerms.slice(0, 4),
+      scoreValue: scored.score + matchedSnippets.length,
+    });
+  });
+
+  return matches
+    .sort((left, right) => {
+      if (right.scoreValue !== left.scoreValue) {
+        return right.scoreValue - left.scoreValue;
+      }
+
+      return left.title.localeCompare(right.title);
+    })
+    .slice(0, limit)
+    .map(({ scoreValue, ...match }) => match);
+};
+
 const describeFreshness = (scrapedAt: string) => {
   const timestamp = new Date(scrapedAt).getTime();
 
@@ -228,18 +406,20 @@ const buildDailyPick = ({
   preference,
   score,
   fromSavedPool,
+  resumeMatches,
+  knowledgeMatches,
 }: {
   job: JobPosting;
   profile: CandidateProfile;
   preference: JobPreference;
   score: MatchScore;
   fromSavedPool: boolean;
+  resumeMatches: ResumeMaterialMatch[];
+  knowledgeMatches: KnowledgeMatch[];
 }): DailyPick => {
   const fitSignals = [
-    `${score.overall}% overall match from your saved profile and preferences`,
-    score.keywordHits.length > 0
-      ? `Keyword hits: ${score.keywordHits.slice(0, 3).join(', ')}`
-      : null,
+    `${score.overall}% V0 match from role, keyword, skill, location, salary, and application-friction signals`,
+    ...score.reasons.slice(0, 4),
     hasTargetRoleMatch(job, profile) && profile.targetRoles[0]
       ? `Title overlaps with target roles like ${profile.targetRoles[0]}`
       : null,
@@ -248,16 +428,20 @@ const buildDailyPick = ({
   ].filter((item): item is string => Boolean(item));
 
   const watchouts = [
-    score.gaps.length > 0 ? `Missing keywords: ${score.gaps.slice(0, 3).join(', ')}` : null,
-    !job.easyApply ? 'Manual application flow' : null,
-    !hasRegionMatch(job, preference) && preference.regions.length > 0
-      ? `Outside preferred regions: ${preference.regions.slice(0, 2).join(', ')}`
-      : null,
-    preference.vipCompanies.some((company) => company.toLowerCase() === job.company.toLowerCase())
-      ? 'VIP company, worth a deliberate review'
-      : null,
-    !job.salaryText ? 'Salary not listed' : null,
-  ].filter((item): item is string => Boolean(item));
+    ...new Set(
+      [
+        ...score.gaps.slice(0, 4),
+        !job.easyApply ? 'Manual application flow' : null,
+        !hasRegionMatch(job, preference) && preference.regions.length > 0
+          ? `Outside preferred regions: ${preference.regions.slice(0, 2).join(', ')}`
+          : null,
+        preference.vipCompanies.some((company) => company.toLowerCase() === job.company.toLowerCase())
+          ? 'VIP company, worth a deliberate review'
+          : null,
+        !job.salaryText ? 'Salary not listed' : null,
+      ].filter((item): item is string => Boolean(item)),
+    ),
+  ];
 
   return {
     job,
@@ -266,6 +450,8 @@ const buildDailyPick = ({
     watchouts,
     sourceLabel: fromSavedPool ? `${job.source} saved pool` : `${job.source} sample pool`,
     freshnessLabel: describeFreshness(job.scrapedAt),
+    resumeMatches,
+    knowledgeMatches,
   };
 };
 
@@ -273,11 +459,13 @@ export const getDailyPicks = async (
   candidateId = defaultCandidateId,
   limit = 3,
 ): Promise<DailyPicksSnapshot> => {
-  const [profile, preference, jobs, attempts] = await Promise.all([
+  const [profile, preference, jobs, attempts, resumes, knowledgeEntries] = await Promise.all([
     store.getProfile(candidateId),
     store.getPreferences(candidateId),
     store.listJobs(),
     store.listAttempts(candidateId),
+    store.listResumes(candidateId),
+    getKnowledgeBaseEntries(),
   ]);
 
   if (!profile || !preference) {
@@ -293,9 +481,13 @@ export const getDailyPicks = async (
     };
   }
 
-  const attemptedJobIds = new Set(attempts.map((attempt) => attempt.jobPostingId));
+  const hiddenJobIds = new Set(
+    attempts
+      .filter((attempt) => dailyPickHiddenStatuses.has(attempt.status))
+      .map((attempt) => attempt.jobPostingId),
+  );
   const savedPool = dedupeJobs(
-    jobs.filter((job) => !attemptedJobIds.has(job.id) && !isSyntheticJob(job)),
+    jobs.filter((job) => !hiddenJobIds.has(job.id) && !isSyntheticJob(job)),
   );
 
   const combinedPool = savedPool;
@@ -303,6 +495,17 @@ export const getDailyPicks = async (
   const picks = combinedPool
     .map((job) => {
       const score = scoreJobAgainstPreferences(profile, preference, job);
+      const knowledgeMatches = matchKnowledgeEntriesForJob({
+        entries: knowledgeEntries,
+        job,
+        score,
+      });
+      const resumeMatches = matchResumeMaterialsForJob({
+        profile,
+        resumes,
+        job,
+        score,
+      });
 
       return buildDailyPick({
         job,
@@ -310,6 +513,8 @@ export const getDailyPicks = async (
         preference,
         score,
         fromSavedPool: true,
+        resumeMatches,
+        knowledgeMatches,
       });
     })
     .sort((left, right) => {
@@ -339,6 +544,95 @@ export const getDailyPicks = async (
     preference,
     setupRequired: false,
   };
+};
+
+const buildSavedJobsRunId = (candidateId: string, source: SourcePlatform) =>
+  `${savedJobsRunPrefix}_${slugify(candidateId)}_${source}`;
+
+const buildSavedJobAttemptId = (candidateId: string, job: JobPosting) =>
+  `attempt_saved_${slugify(candidateId)}_${slugify(job.id)}`;
+
+const getOrCreateSavedJobsRun = async ({
+  candidateId,
+  source,
+}: {
+  candidateId: string;
+  source: SourcePlatform;
+}) => {
+  const runId = buildSavedJobsRunId(candidateId, source);
+  const runs = await store.listRuns(candidateId);
+  const existingRun = runs.find((run) => run.id === runId);
+
+  if (existingRun) {
+    return existingRun;
+  }
+
+  return store.createRun({
+    id: runId,
+    candidateId,
+    source,
+    targetCount: 0,
+    processedCount: 0,
+    successfulCount: 0,
+    failedCount: 0,
+    pausedCount: 0,
+    status: 'idle',
+    startedAt: new Date().toISOString(),
+    completedAt: null,
+    notes: 'Saved jobs synced into the application tracker.',
+  });
+};
+
+const syncSavedJobToApplicationTracker = async ({
+  candidateId,
+  job,
+}: {
+  candidateId: string;
+  job: JobPosting;
+}) => {
+  const run = await getOrCreateSavedJobsRun({
+    candidateId,
+    source: job.source,
+  });
+  const attempts = await store.listAttempts(candidateId);
+  const attemptId = buildSavedJobAttemptId(candidateId, job);
+  const existingAttempt = attempts.find(
+    (attempt) => attempt.id === attemptId || attempt.jobPostingId === job.id,
+  );
+  const now = new Date().toISOString();
+  const metadata = {
+    ...(existingAttempt?.metadata ?? {}),
+    company: job.company,
+    title: job.title,
+    platform: job.source,
+    source: 'saved_job',
+    jobUrl: job.url,
+    savedJobSyncedAt: now,
+  };
+
+  if (existingAttempt) {
+    return store.saveAttempt({
+      ...existingAttempt,
+      jobPostingId: job.id,
+      metadata,
+      updatedAt: now,
+    });
+  }
+
+  return store.saveAttempt({
+    id: attemptId,
+    runId: run.id,
+    jobPostingId: job.id,
+    tailoredResumeId: null,
+    status: 'drafted',
+    reviewReason: null,
+    receiptPath: null,
+    receiptUrl: null,
+    lastError: null,
+    metadata,
+    submittedAt: null,
+    updatedAt: now,
+  });
 };
 
 export const saveManualJob = async ({
@@ -372,7 +666,7 @@ export const saveManualJob = async ({
     url.match(/job\/([A-Za-z0-9-]+)/i)?.[1] ??
     slugify(nonEmptyString(input.title, 'manual-role'));
 
-  return store.saveJob(
+  const job = await store.saveJob(
     buildJobRecord({
       source,
       externalJobId: externalIdFromUrl,
@@ -388,6 +682,13 @@ export const saveManualJob = async ({
       scrapedAt: new Date().toISOString(),
     }),
   );
+
+  await syncSavedJobToApplicationTracker({
+    candidateId,
+    job,
+  });
+
+  return job;
 };
 
 export const scoreJobForCandidate = async ({
