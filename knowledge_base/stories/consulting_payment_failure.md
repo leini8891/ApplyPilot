@@ -1,23 +1,23 @@
-# Capgemini Payment Failure
+# Consulting Payment Failure
 
 ## Context
 
-Use this story when asked about payments, reliability, incident prevention, cross-system delivery, or how to work with engineering and operations on ambiguous failure modes.
+Use this story when asked about payments, reliability, incident prevention, cross-system delivery, or how to work with engineering and operations on ambiguous failure modes. This is a public-safe consulting template.
 
 ## Core facts
 
-- Company: Capgemini China.
-- Role: Senior Product Manager.
-- Period: December 2016 to July 2021.
-- Client context: Starbucks, McDonald's, and multinational enterprise programs.
-- Systems involved: mobile app, POS, OMS, CRM, ESB, Salesforce, reporting, and payment/order workflows.
+- Company: Global consulting firm.
+- Role: Product Manager.
+- Period: Template example.
+- Client context: enterprise retail and consumer-service programs.
+- Systems involved: mobile app, POS, OMS, CRM, integration middleware, reporting, and payment/order workflows.
 - Problem pattern: customer payment success could diverge from downstream order generation or confirmation across integrated systems.
 - Product actions: translated edge cases into requirements, idempotency rules, callback compensation, monitoring workflows, UAT scenarios, release readiness, and support handoffs.
-- Reported impact in existing resume material: reduced order-loss risk by about 30%.
+- Reported impact in sanitized resume material: reduced order-loss risk meaningfully.
 
 ## Interview value
 
-This is the strongest practical payments story. It shows payment reliability, customer impact, operational recovery, technical collaboration, and merchant-like workflow thinking without claiming traditional acquiring ownership.
+This is a practical payments story. It shows payment reliability, customer impact, operational recovery, technical collaboration, and merchant-like workflow thinking without claiming traditional acquiring ownership.
 
 ## Reusable answer points
 

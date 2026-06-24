@@ -55,9 +55,9 @@ curl -X POST http://localhost:3000/api/jobs/save \
   --data '{
     "source": "linkedin",
     "title": "Senior Product Manager, Payments Platform",
-    "company": "CheckoutCo",
+    "company": "Demo Payments Co",
     "location": "Singapore",
-    "url": "https://example.com/jobs/checkoutco-payments-platform",
+    "url": "https://example.com/jobs/demo-payments-platform",
     "description": "Own payment platform strategy for checkout, KYC, AML, compliance dashboards, data insights, growth experiments, merchant onboarding, and cross-functional delivery.",
     "salaryText": "SGD 160k - 190k",
     "employmentType": "Full-time",

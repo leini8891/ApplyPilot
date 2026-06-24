@@ -12,10 +12,10 @@ const setStepMarkup = (stage: 'resume' | 'review' | 'success') => {
     document.body.innerHTML = `
       <main>
         <section data-top="80" data-left="40">
-          <h1 data-top="90" data-left="40">XIAO HAO applying for Data Analyst</h1>
+          <h1 data-top="90" data-left="40">Demo Candidate applying for Data Analyst</h1>
           <div data-top="120" data-left="40">Step 1 of 3: Upload resume</div>
           <div data-top="200" data-left="40">Select an existing resume</div>
-          <label data-top="260" data-left="40">Elena Xiao.pdf</label>
+          <label data-top="260" data-left="40">demo-candidate.pdf</label>
           <button type="button" data-top="700" data-left="1100">Next, review application</button>
         </section>
       </main>

@@ -14,17 +14,16 @@ insert into public.candidate_profiles (
 )
 values (
   'demo-user',
-  'Elena Tan',
-  'elena@example.com',
-  '+65 8888 8888',
+  'Demo Candidate',
+  'demo@example.com',
+  '+65 0000 0000',
   'Singapore',
   12,
-  'Senior product leader with deep fintech and Web3 operating experience across APAC.',
-  '[{"company":"FinStride","title":"Senior Product Manager","startDate":"2020-01","endDate":null,"summary":"Led KYC, onboarding, and payments roadmap.","achievements":["Improved KYC completion by 21%"]}]'::jsonb,
+  'Senior product leader with fintech, payments, data product, and automation experience across APAC.',
+  '[{"company":"Demo Fintech App","title":"Senior Product Manager","startDate":"2020-01","endDate":null,"summary":"Led KYC, onboarding, and payments roadmap.","achievements":["Improved KYC completion by 21%"]}]'::jsonb,
   '["Product strategy","Payments","KYC","Growth experiments"]'::jsonb,
   '["Senior Product Manager","Lead Product Manager"]'::jsonb,
-  '["Fintech","Web3","SaaS"]'::jsonb,
+  '["Fintech","Payments","SaaS"]'::jsonb,
   '[]'::jsonb
 )
 on conflict (id) do nothing;
-

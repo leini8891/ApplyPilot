@@ -1,4 +1,4 @@
-# Lorenzo Data Platform
+# Generic DeFi Data Platform
 
 ## Context
 
@@ -6,9 +6,9 @@ Use this story when asked about data platforms, metrics, incentive systems, exec
 
 ## Core facts
 
-- Company: Lorenzo Protocol.
-- Role: Lead Data Product Analyst.
-- Period: July 2024 to February 2025.
+- Company: Generic DeFi protocol.
+- Role: Data Product Lead.
+- Period: Template example.
 - Product context: fintech data product environment focused on transaction-flow analytics, product metrics, incentive performance, and executive decision support.
 - Partnered with Product, Engineering, and leadership to translate user activity, transaction or asset-flow data, and reward performance into product decisions.
 - Built dashboards tracking active users, participation, duration, asset flows, conversion patterns, reward-structure performance, and retention or operational review signals.

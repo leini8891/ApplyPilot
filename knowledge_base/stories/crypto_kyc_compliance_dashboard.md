@@ -1,19 +1,19 @@
-# Bybit KYC Compliance Dashboard
+# Generic Crypto Exchange KYC Compliance Dashboard
 
 ## Context
 
-Use this story for KYC, compliance, risk operations, stakeholder self-service, data product management, and regulated workflow interviews.
+Use this story for KYC, compliance, risk operations, stakeholder self-service, data product management, and regulated workflow interviews. This is a public-safe template based on common regulated-fintech product patterns.
 
 ## Core facts
 
-- Company: Bybit Fintech Limited.
-- Role: Lead Data Product Analyst, Business Intelligence Center.
-- Period: April 2022 to June 2024.
+- Company: Generic crypto exchange.
+- Role: Data Product Lead.
+- Period: Template example.
 - Stakeholders: Product, Compliance, Operations, Customer Service, Finance, Data, and leadership.
 - Built dashboards covering KYC status, user holdings, fund size, product exposure, suspicious transfers, abnormal withdrawals, support quality, and operational performance.
 - Reduced repeated ad-hoc compliance data pulls from days to minutes.
-- Created 18 SOPs across warehouse standards, table naming, demand management, dashboard delivery, ownership, SLA tracking, and insight-to-action workflows.
-- Related service analytics work saved 660+ hours per month in manual customer-service analytics.
+- Created operating standards across warehouse naming, demand management, dashboard delivery, ownership, SLA tracking, and insight-to-action workflows.
+- Related service analytics work reduced recurring manual analytics effort.
 
 ## Interview value
 

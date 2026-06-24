@@ -8,8 +8,8 @@
     "callback compensation"
   ],
   "resumeSignals": [
-    "Reduced order-loss risk by about 30%.",
-    "Mapped mobile app, POS, OMS, CRM, ESB, Salesforce, reporting, and payment/order workflows.",
+    "Reduced order-loss risk meaningfully.",
+    "Mapped mobile app, POS, OMS, CRM, integration middleware, reporting, and payment/order workflows.",
     "Defined idempotency rules, callback compensation, monitoring workflows, UAT scenarios, release readiness, and support handoffs."
   ]
 }

@@ -55,7 +55,7 @@ Each markdown entry should include:
 ## Tags
 ```
 
-Tags should be short and retrieval-friendly, for example `payments`, `KYC`, `AML`, `data product`, `automation`, `merchant experience`, `Adyen`, or `APAC`.
+Tags should be short and retrieval-friendly, for example `payments`, `KYC`, `AML`, `data product`, `automation`, `merchant experience`, `risk monitoring`, or `APAC`.
 
 ## JSON Convention
 

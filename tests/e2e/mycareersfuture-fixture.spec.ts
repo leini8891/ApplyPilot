@@ -12,6 +12,6 @@ test('mocked MyCareersFuture fixture exposes an apply entry point', async ({ pag
   await page.setContent(html);
 
   await expect(page.locator('h1')).toHaveText('Business Intelligence Analyst');
-  await expect(page.locator('a[href*="/companies/"]')).toHaveText('HMI Medical');
+  await expect(page.locator('a[href*="/companies/"]')).toHaveText('Demo Healthcare Co');
   await expect(page.locator('button')).toHaveText('Apply Now');
 });

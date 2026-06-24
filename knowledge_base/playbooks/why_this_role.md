@@ -8,7 +8,7 @@ Use this playbook for "Why this role?" in product manager interviews, especially
 
 - The role should be framed as a natural next step from payment-adjacent reliability, compliance operations, risk monitoring, and data product work.
 - The candidate should acknowledge the domain transition directly and explain why the core product muscles transfer.
-- Best supporting stories: Capgemini payment failure, Bybit KYC dashboard, Lorenzo data platform.
+- Best supporting stories: consulting payment failure, generic crypto exchange KYC dashboard, DeFi analytics platform.
 
 ## Interview value
 
@@ -33,7 +33,6 @@ This answer reduces perceived career risk. It shows the move is intentional, not
 
 - payments
 - merchant experience
-- Adyen
 - data product
 - KYC
 - AML

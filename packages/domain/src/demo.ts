@@ -13,16 +13,16 @@ const now = new Date().toISOString();
 
 export const demoCandidateProfile: CandidateProfile = {
   id: 'demo-user',
-  fullName: 'Elena Tan',
-  email: 'elena@example.com',
-  phone: '+65 8888 8888',
+  fullName: 'Demo Candidate',
+  email: 'demo@example.com',
+  phone: '+65 0000 0000',
   location: 'Singapore',
   yearsExperience: 12,
   summary:
-    'Senior product leader with deep fintech and Web3 operating experience across APAC.',
+    'Senior product leader with fintech, payments, data product, and automation experience across APAC.',
   workExperiences: [
     {
-      company: 'FinStride',
+      company: 'Demo Fintech App',
       title: 'Senior Product Manager',
       startDate: '2020-01',
       endDate: null,
@@ -35,10 +35,10 @@ export const demoCandidateProfile: CandidateProfile = {
   ],
   skills: ['Product strategy', 'Payments', 'KYC', 'Growth experiments', 'Stakeholder management'],
   targetRoles: ['Senior Product Manager', 'Lead Product Manager', 'Head of Product'],
-  industries: ['Fintech', 'Web3', 'SaaS'],
+  industries: ['Fintech', 'Payments', 'SaaS'],
   education: [
     {
-      institution: 'National University of Singapore',
+      institution: 'Demo University',
       degree: 'BBA',
       field: 'Marketing',
       graduationYear: '2012',
@@ -51,7 +51,7 @@ export const demoResume: ResumeVersion = {
   id: 'resume_demo',
   candidateId: 'demo-user',
   label: 'Master Resume',
-  sourceFileName: 'elena-tan-master-resume.pdf',
+  sourceFileName: 'demo-candidate-master-resume.pdf',
   sourceFileType: 'application/pdf',
   textContent:
     'Senior product leader with 12 years of experience in fintech, KYC, payments, and growth.',
@@ -63,12 +63,12 @@ export const demoResume: ResumeVersion = {
 export const demoPreferences: JobPreference = {
   candidateId: 'demo-user',
   keywords: ['fintech', 'payments', 'growth', 'product strategy'],
-  industries: ['fintech', 'web3'],
+  industries: ['fintech', 'payments'],
   regions: ['singapore', 'remote'],
   minSalary: 140000,
   salaryCurrency: 'SGD',
   dailyTarget: 25,
-  vipCompanies: ['Stripe', 'Grab'],
+  vipCompanies: ['Demo Payments Co', 'Demo Banking Co'],
   remotePolicy: 'hybrid',
   easyApplyOnly: true,
 };
@@ -79,7 +79,7 @@ export const demoJobs: JobPosting[] = [
     source: 'linkedin',
     externalJobId: '12345',
     title: 'Senior Product Manager, Payments',
-    company: 'Airwallex',
+    company: 'Demo Payments Co',
     location: 'Singapore',
     salaryText: 'SGD 160k - 190k',
     employmentType: 'Full-time',
@@ -95,7 +95,7 @@ export const demoJobs: JobPosting[] = [
     source: 'linkedin',
     externalJobId: '56789',
     title: 'Lead Product Manager, Core Banking',
-    company: 'Grab',
+    company: 'Demo Banking Co',
     location: 'Singapore',
     salaryText: null,
     employmentType: 'Full-time',
@@ -135,7 +135,7 @@ export const demoAttempts: ApplicationAttempt[] = [
     receiptUrl: null,
     lastError: null,
     metadata: {
-      company: 'Airwallex',
+      company: 'Demo Payments Co',
       title: 'Senior Product Manager, Payments',
     },
     submittedAt: now,
@@ -152,7 +152,7 @@ export const demoAttempts: ApplicationAttempt[] = [
     receiptUrl: null,
     lastError: null,
     metadata: {
-      company: 'Grab',
+      company: 'Demo Banking Co',
       title: 'Lead Product Manager, Core Banking',
     },
     submittedAt: null,
@@ -165,7 +165,7 @@ export const demoReviewItems: ReviewQueueItem[] = [
     id: 'review_1',
     applicationId: 'attempt_2',
     reason: 'VIP company',
-    company: 'Grab',
+    company: 'Demo Banking Co',
     title: 'Lead Product Manager, Core Banking',
     priority: 'high',
     createdAt: now,
@@ -187,4 +187,3 @@ export const demoInterviews: InterviewRecord[] = [
     updatedAt: now,
   },
 ];
-

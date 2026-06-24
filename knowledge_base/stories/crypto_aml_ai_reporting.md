@@ -1,4 +1,4 @@
-# Gate AML And AI Reporting
+# Generic Crypto AML And AI Reporting
 
 ## Context
 
@@ -6,11 +6,11 @@ Use this story for AML, financial crime, AI reporting, risk analytics, complianc
 
 ## Core facts
 
-- Target narrative: Gate-style AML and financial crime compliance product work.
-- Source experience: independent AI/data product work plus prior Bybit compliance, risk, and data product patterns.
+- Target narrative: AML and financial crime compliance product work in a regulated fintech or crypto environment.
+- Source experience: AI/data product work plus compliance, risk, and data product patterns.
 - Built or scoped AI/data prototypes for transaction analytics, anti-scam review, risk reporting, support operations, workflow automation, and trusted decision support.
-- Designed LLM/Dify-powered reporting workflows across transaction, fund-flow, market-feed, user-behavior, and operational data.
-- Existing resume material positions this as reducing manual reporting turnaround from hours to minutes, with some role-specific resumes using an 8-hours-to-under-3-minutes example across 10M+ daily records.
+- Designed LLM-powered reporting workflows across transaction, fund-flow, market-feed, user-behavior, and operational data.
+- Sanitized impact framing: reduced manual reporting turnaround from hours to minutes.
 - AML-oriented framing: suspicious fund-flow logic, alert rules, false-positive/false-negative tradeoffs, human review paths, auditability, and leadership-ready narratives.
 
 ## Interview value
