@@ -8,6 +8,7 @@ import {
 
 import {
   getDashboardData,
+  getDailyPicks,
   matchResumeMaterialsForJob,
   saveManualJob,
   updateApplicationStatus,
@@ -98,6 +99,44 @@ describe('app service saved jobs and material search', () => {
     expect(attempts).toHaveLength(1);
     expect(refreshedAttempt?.status).toBe('submitted');
     expect(refreshedAttempt?.metadata.title).toBe('Senior Product Manager, Payments');
+  });
+
+  it('keeps drafted saved jobs visible in Daily Picks for prep review', async () => {
+    await store.clearCandidateData(candidateId);
+    await store.upsertProfile({
+      ...demoCandidateProfile,
+      id: candidateId,
+    });
+    await store.upsertPreferences({
+      ...demoPreferences,
+      candidateId,
+    });
+    await store.saveResume({
+      ...demoResume,
+      id: 'resume_app_service_daily_picks',
+      candidateId,
+    });
+
+    const job = await saveManualJob({
+      candidateId,
+      input: {
+        source: 'linkedin',
+        title: 'Senior Product Manager, Payments Platform',
+        company: 'Checkout Co',
+        location: 'Singapore',
+        url: 'https://www.linkedin.com/jobs/view/616161/',
+        description:
+          'Own payment platform strategy, KYC, AML, merchant onboarding, and compliance dashboards.',
+        salaryText: 'SGD 160k - 190k',
+        easyApply: true,
+      },
+    });
+
+    const dailyPicks = await getDailyPicks(candidateId);
+
+    expect(dailyPicks.setupRequired).toBe(false);
+    expect(dailyPicks.picks.some((pick) => pick.job.id === job.id)).toBe(true);
+    expect(dailyPicks.picks[0]?.resumeMatches.length).toBeGreaterThan(0);
   });
 
   it('retrieves resume material for a scored job', () => {

@@ -1,103 +1,185 @@
 <div align="center">
 
-# 🛫 ApplyPilot
+# ApplyPilot
 
-**A LinkedIn-first job-application copilot — score, tailor, and semi-autonomously apply.**
+**A local-first AI job-search cockpit for matching roles, retrieving career stories, and tracking applications.**
 
-Built for the Singapore market, where the off-the-shelf auto-apply tools are expensive and none are tuned for local boards.
+ApplyPilot turns a resume, a sanitized local knowledge base, and saved job posts into a daily shortlist with concrete prep assets: resume evidence, reusable stories, answer playbooks, and tracker records.
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Next.js](https://img.shields.io/badge/Next.js-15-000000?logo=nextdotjs&logoColor=white)](https://nextjs.org/)
 [![Chrome Extension](https://img.shields.io/badge/Chrome-MV3-4285F4?logo=googlechrome&logoColor=white)](https://developer.chrome.com/docs/extensions/mv3/intro/)
-[![Supabase](https://img.shields.io/badge/Supabase-Postgres-3FCF8E?logo=supabase&logoColor=white)](https://supabase.com/)
+[![Supabase](https://img.shields.io/badge/Supabase-optional-3FCF8E?logo=supabase&logoColor=white)](https://supabase.com/)
 [![pnpm](https://img.shields.io/badge/pnpm-monorepo-F69220?logo=pnpm&logoColor=white)](https://pnpm.io/)
-[![Tests](https://img.shields.io/badge/tests-passing-brightgreen)](#testing)
+[![Tests](https://img.shields.io/badge/tests-20%20passing-brightgreen)](#verification)
 
 </div>
 
 ---
 
-## Why this exists
+## Why It Exists
 
-Commercial auto-apply services are pricey and US-centric. None of them handle **LinkedIn _and_ MyCareersFuture** (Singapore's national jobs board) together, with local screening logic (work authorization, notice period, salary in SGD). ApplyPilot is a single-user, self-hosted copilot that does the tedious 80% — finding, scoring, tailoring, and form-filling — while keeping a human firmly in the loop for anything risky.
+Most job-search tools stop at keyword matching or blind auto-apply. ApplyPilot is built for the slower, more useful middle layer: deciding which roles are worth attention, finding the strongest evidence for each role, and keeping the application pipeline organized without leaking private notes into Git.
 
-> **Honest status:** MVP. The scoring, resume-tailoring, dashboard, and review pipeline are solid and tested. The browser auto-fill layer works against current LinkedIn / MyCareersFuture DOM but, like every scraper, is in a permanent cat-and-mouse with their anti-automation defenses — treat it as *assisted* applying, not fire-and-forget.
+This version moves the center of gravity from browser automation alone to the part that can be reliable every day: local knowledge ingestion, retrieval, scoring, prep assets, and tracker sync. The LinkedIn/MyCareersFuture extension remains an assisted apply layer, while the core product now works as a usable job-search cockpit even when no external services are configured.
 
-## What it does
+The product is intentionally single-user and local-first:
 
-| Capability | How |
+- Public-safe career stories live in `knowledge_base/`.
+- Private interview notes can live in `local_workspace/knowledge_base_private/`, which is ignored by Git.
+- The app works with an in-memory demo store by default, so it runs without Supabase or OpenAI.
+- AI calls have deterministic fallbacks, keeping the workflow usable without external services.
+
+## Product Tour
+
+| Knowledge base | Daily picks | Application tracker |
+| --- | --- | --- |
+| ![Knowledge Base](docs/assets/knowledge-base.png) | ![Daily Picks](docs/assets/daily-picks.png) | ![Application Tracker](docs/assets/application-tracker.png) |
+
+## What It Does
+
+| Capability | What it means |
 | --- | --- |
-| **🎯 Match scoring** | Heuristic keyword/skill/region scoring with an optional LLM pass; every job gets a 0–100 fit score, hit/gap keywords, and an apply / review / skip recommendation. |
-| **📝 Tailored resumes** | Per-job resume rewrite (LLM-assisted, with a deterministic fallback) rendered to a clean one-page PDF. |
-| **🤖 Semi-auto apply** | Chrome MV3 extension drives the LinkedIn Easy Apply / MyCareersFuture flow inside *your own* authenticated session, filling contact fields, screening questions, and resume upload. |
-| **🛟 Review routing** | VIP companies, non-Easy-Apply roles, and unanswerable knockout questions are pushed to a review queue instead of being submitted blindly. |
-| **📊 Batch runs** | Set a target (1–50) and ApplyPilot works down the search-results list, scrolling and paginating, until the target is hit. |
-| **🗂️ Pipeline tracking** | Dashboard records applications, receipts (screenshots), and interview notes. |
+| Role matching V0 | Scores saved jobs against profile, preferences, keywords, skills, region, salary, remote policy, and application friction. |
+| Resume and story retrieval | Retrieves resume evidence plus reusable stories, interview notes, job profiles, and answer playbooks for a role. |
+| Local Markdown/JSON knowledge base | Reads structured Markdown, JSON sidecars, standalone JSON entries, and private local-only entries. |
+| Daily Picks | Ranks saved jobs and attaches prep assets under each role so review starts with evidence, not a blank page. |
+| Application tracker sync | Manual job saves create `drafted` tracker records, and repeat saves do not reset existing statuses. |
+| Human-in-the-loop automation | The Chrome extension can assist LinkedIn and MyCareersFuture flows, while risky cases route to review. |
+
+## Core Workflow
+
+```mermaid
+flowchart LR
+  Resume["Resume text"] --> Match["Role matching"]
+  Jobs["Saved job posts"] --> Match
+  PublicKB["knowledge_base/ Markdown + JSON"] --> Retrieve["Prep asset retrieval"]
+  PrivateKB["local_workspace/knowledge_base_private/"] --> Retrieve
+  Match --> Picks["Daily Picks"]
+  Retrieve --> Picks
+  Picks --> Tracker["Application tracker"]
+  Tracker --> Notes["Interview notes and reusable stories"]
+  Notes --> PublicKB
+```
+
+1. Upload or parse a resume and confirm job preferences.
+2. Save a real job into the pool from the Daily Picks page.
+3. ApplyPilot scores the role and retrieves relevant evidence from resume text and the local knowledge base.
+4. The job appears in Daily Picks with `Prep assets`.
+5. The same saved job is synced into Application tracker as a `drafted` application record.
+
+See [docs/demo-flow.md](docs/demo-flow.md) for a reproducible local demo.
+
+## Knowledge Base
+
+ApplyPilot reads public-safe entries from:
+
+```text
+knowledge_base/
+├── interviews/
+├── job_profiles/
+├── playbooks/
+└── stories/
+```
+
+It also reads private local entries from:
+
+```text
+local_workspace/knowledge_base_private/
+```
+
+Markdown entries use this structure:
+
+```md
+# Title
+
+## Context
+
+## Core facts
+
+## Interview value
+
+## Reusable answer points
+
+## Related roles
+
+## Tags
+```
+
+JSON sidecars and standalone JSON entries can add structured retrieval fields such as `searchTerms` and `resumeSignals`. Details are documented in [knowledge_base/README.md](knowledge_base/README.md).
 
 ## Architecture
 
-```
-applypilot/  (pnpm monorepo)
+```text
+applypilot/
 ├── apps/
-│   ├── web/          Next.js dashboard + API routes (onboarding, scoring, runs, review, interviews)
-│   └── extension/    Chrome MV3 extension (popup, service worker, LinkedIn + MyCareersFuture content scripts)
+│   ├── web/          Next.js dashboard and API routes
+│   └── extension/    Chrome MV3 extension for assisted apply flows
 ├── packages/
-│   ├── domain/       Shared zod schemas, scoring + review-routing logic (framework-agnostic, unit-tested)
+│   ├── domain/       Zod schemas, scoring, review routing, pure helpers
 │   ├── ui/           Shared React primitives
 │   └── config/       Environment validation
-└── supabase/         SQL migrations and row-level-security policies
+├── knowledge_base/   Public-safe Markdown/JSON career knowledge
+├── local_workspace/  Private local-only notes, ignored by Git
+├── tests/            Unit and integration tests
+└── supabase/         Optional Postgres schema
 ```
 
-**Design choices worth noting**
+Design choices:
 
-- **Domain logic is isolated and pure** (`packages/domain`) — scoring and review-routing have zero framework deps and are the unit-tested core.
-- **The extension never stores LinkedIn credentials** and only ever runs inside a session the user is already logged into.
-- **Graceful degradation** — every AI call (profile parse, scoring, resume tailoring) has a deterministic fallback, so the app is fully usable with no OpenAI key.
-- **Supabase-optional** — an in-memory store with seed data lets you run the whole thing locally with zero external services.
+- Keep domain logic framework-agnostic and testable.
+- Prefer local Markdown/JSON for early knowledge-base features.
+- Treat public and private knowledge folders differently by default.
+- Preserve application status when a saved job is refreshed.
+- Keep automation assisted and reviewable instead of fire-and-forget.
 
-## Quick start
+## Quick Start
 
 ```bash
-# 1. Prereqs: Node 22 + pnpm
+# Prereqs: Node 22 and pnpm
 pnpm install
 
-# 2. Run the dashboard + API (works with zero config thanks to the in-memory demo store)
-pnpm dev:web            # http://localhost:3000
+# Run the dashboard and API
+pnpm dev:web
 
-# 3. Build the extension in watch mode, then load apps/extension/dist as an unpacked extension
+# Optional: build the Chrome extension in watch mode
 pnpm dev:extension
 ```
 
-For a real setup, copy `.env.example` → `.env.local`, fill in Supabase + OpenAI keys, and apply `supabase/migrations/0001_init.sql`.
+Open [http://localhost:3000](http://localhost:3000).
 
-## Batch apply
+For a persistent database-backed setup, copy `.env.example` to `.env.local`, fill in Supabase/OpenAI values as needed, and apply the SQL migrations under `supabase/migrations/`.
 
-1. Open a LinkedIn **jobs search results** page (filtered to your roles + location).
-2. Set **Run target** in the popup (1–50) and press **Start run**.
-3. ApplyPilot walks the results list — selecting each job, completing Easy Apply, scrolling and paginating — until the target is reached.
-4. VIP / non-Easy-Apply / risky roles are routed to review instead of auto-submitted. Counts update live.
-
-## Testing
+## Verification
 
 ```bash
-pnpm test        # unit tests (domain scoring, store, MyCareersFuture flow)
-pnpm test:e2e    # Playwright fixtures
-pnpm lint        # typecheck
+pnpm test    # 20 tests covering scoring, KB parsing/retrieval, tracker sync, store behavior
+pnpm build   # production build for all workspace packages
+pnpm lint    # typecheck and lint
 ```
 
-## Tech stack
+The current portfolio packaging lives on `codex/resume-story-search`.
 
-TypeScript · Next.js 15 · React 19 · Chrome Manifest V3 · Vite + CRXJS · Supabase (Postgres) · Zod · Vitest · Playwright · pnpm workspaces
+## Privacy Boundary
 
-## Roadmap
+Commit only sanitized, reusable material under `knowledge_base/`. Keep private recruiter details, interview schedules, exact compensation expectations, personal documents, local resume paths, and sensitive application notes under `local_workspace/knowledge_base_private/`.
 
-- [ ] Resilient selectors / self-healing against LinkedIn DOM drift
-- [ ] MyCareersFuture batch parity
-- [ ] Cover-letter generation (currently feature-flagged off)
-- [ ] Multi-user mode with per-user Supabase RLS
+`local_workspace/` is ignored by Git.
+
+## Project Status
+
+This is a complete portfolio-ready V0 of the knowledge-backed job-search workflow:
+
+- Match saved jobs.
+- Retrieve resume evidence and career-story assets.
+- Attach prep assets to Daily Picks.
+- Sync saved jobs into Application tracker.
+- Keep public and private knowledge separated.
+
+The next logical branch is `codex/application-workflow-v0`, which would add an end-to-end application prep packet: selected evidence, tailored resume draft, cover note/checklist, and application detail timeline.
 
 ---
 
 <div align="center">
-<sub>Built as a practical AI-product exercise: data ingestion → scoring → generation → guarded automation → human review.</sub>
+<sub>Built as a practical AI product exercise: local knowledge ingestion -> retrieval -> role matching -> application tracking -> human review.</sub>
 </div>

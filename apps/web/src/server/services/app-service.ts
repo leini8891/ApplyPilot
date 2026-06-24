@@ -35,6 +35,14 @@ const syntheticJobUrls = new Set([
   'https://www.linkedin.com/jobs/view/999/',
 ]);
 const savedJobsRunPrefix = 'run_saved_jobs';
+const dailyPickHiddenStatuses = new Set<ApplicationAttempt['status']>([
+  'submitted',
+  'viewed',
+  'interview',
+  'offer',
+  'rejected',
+  'failed',
+]);
 
 export type ResumeMaterialMatch = {
   title: string;
@@ -473,9 +481,13 @@ export const getDailyPicks = async (
     };
   }
 
-  const attemptedJobIds = new Set(attempts.map((attempt) => attempt.jobPostingId));
+  const hiddenJobIds = new Set(
+    attempts
+      .filter((attempt) => dailyPickHiddenStatuses.has(attempt.status))
+      .map((attempt) => attempt.jobPostingId),
+  );
   const savedPool = dedupeJobs(
-    jobs.filter((job) => !attemptedJobIds.has(job.id) && !isSyntheticJob(job)),
+    jobs.filter((job) => !hiddenJobIds.has(job.id) && !isSyntheticJob(job)),
   );
 
   const combinedPool = savedPool;
