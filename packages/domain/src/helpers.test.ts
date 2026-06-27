@@ -28,7 +28,7 @@ describe('domain helpers', () => {
   it('routes strong matches to review when application friction conflicts with preferences', () => {
     const score = scoreJobAgainstPreferences(demoCandidateProfile, demoPreferences, {
       ...demoJobs[0],
-      id: 'manual_payments_role',
+      id: 'manual_workflow_role',
       easyApply: false,
     });
 
@@ -40,16 +40,16 @@ describe('domain helpers', () => {
   it('penalizes roles that appear below the saved salary floor', () => {
     const score = scoreJobAgainstPreferences(demoCandidateProfile, demoPreferences, {
       ...demoJobs[0],
-      id: 'low_salary_payments_role',
-      salaryText: 'SGD 90k - 110k',
+      id: 'low_salary_workflow_role',
+      salaryText: 'USD 90k - 110k',
     });
 
     expect(score.recommendedAction).toBe('review');
-    expect(score.gaps).toContain('Salary may be below SGD 140000');
+    expect(score.gaps).toContain('Salary may be below USD 120000');
   });
 
   it('parses common salary range formats', () => {
-    expect(parseSalaryUpperBound('SGD 160k - 190k')).toBe(190000);
+    expect(parseSalaryUpperBound('USD 160k - 190k')).toBe(190000);
     expect(parseSalaryUpperBound('$120,000 - $150,000')).toBe(150000);
     expect(parseSalaryUpperBound(null)).toBeNull();
   });

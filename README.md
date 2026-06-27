@@ -37,7 +37,7 @@ The product is intentionally single-user and local-first:
 | --- | --- | --- |
 | ![Knowledge Base](docs/assets/knowledge-base.png) | ![Daily Picks](docs/assets/daily-picks.png) | ![Application Tracker](docs/assets/application-tracker.png) |
 
-### Application Workflow V0
+### Application Workflow
 
 ![Application Workflow](docs/assets/application-workflow.svg)
 
@@ -45,11 +45,11 @@ The product is intentionally single-user and local-first:
 
 | Capability | What it means |
 | --- | --- |
-| Role matching V0 | Scores saved jobs against profile, preferences, keywords, skills, region, salary, remote policy, and application friction. |
+| Role matching | Scores saved jobs against profile, preferences, keywords, skills, region, salary, remote policy, and application friction. |
 | Resume and story retrieval | Retrieves resume evidence plus reusable stories, interview notes, job profiles, and answer playbooks for a role. |
 | Local Markdown/JSON knowledge base | Reads structured Markdown, JSON sidecars, standalone JSON entries, and private local-only entries. |
 | Daily Picks | Ranks saved jobs and attaches prep assets under each role so review starts with evidence, not a blank page. |
-| Application workflow V0 | Turns a saved role into a human-reviewable checklist with matched resume evidence, story assets, next actions, and tracker state. |
+| Application workflow | Turns a saved role into a human-reviewable checklist with matched resume evidence, story assets, next actions, and tracker state. |
 | Application tracker sync | Manual job saves create `drafted` tracker records, and repeat saves do not reset existing statuses. |
 | Human-in-the-loop automation | The Chrome extension can assist LinkedIn and MyCareersFuture flows, while risky cases route to review. |
 
@@ -166,8 +166,6 @@ pnpm build   # production build for all workspace packages
 pnpm lint    # typecheck and lint
 ```
 
-The current portfolio packaging lives on `codex/application-workflow-v0-new`.
-
 ## Privacy Boundary
 
 Commit only sanitized, reusable material under `knowledge_base/`. Keep private recruiter details, interview schedules, exact compensation expectations, personal documents, local resume paths, and sensitive application notes under `local_workspace/knowledge_base_private/`.
@@ -176,7 +174,7 @@ Commit only sanitized, reusable material under `knowledge_base/`. Keep private r
 
 ## Project Status
 
-This is a complete portfolio-ready V0 of the knowledge-backed job-search workflow:
+This is a portfolio-ready slice of the knowledge-backed job-search workflow:
 
 - Match saved jobs.
 - Retrieve resume evidence and career-story assets.

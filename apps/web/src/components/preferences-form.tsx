@@ -16,7 +16,7 @@ export function PreferencesForm({ preference }: PreferencesFormProps) {
     industries: preference?.industries.join(', ') ?? '',
     regions: preference?.regions.join(', ') ?? '',
     minSalary: String(preference?.minSalary ?? 120000),
-    salaryCurrency: preference?.salaryCurrency ?? 'SGD',
+    salaryCurrency: preference?.salaryCurrency ?? 'USD',
     dailyTarget: String(preference?.dailyTarget ?? 25),
     vipCompanies: preference?.vipCompanies.join(', ') ?? '',
     remotePolicy: preference?.remotePolicy ?? 'any',

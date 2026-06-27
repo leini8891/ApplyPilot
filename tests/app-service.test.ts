@@ -31,11 +31,11 @@ describe('app service saved jobs and material search', () => {
       candidateId,
       input: {
         source: 'linkedin',
-        title: 'Product Manager, Payments',
-        company: 'Checkout Co',
-        location: 'Singapore',
+        title: 'Product Manager, Workflows',
+        company: 'Workflow Co',
+        location: 'Remote',
         url: 'https://www.linkedin.com/jobs/view/424242/',
-        description: 'Own payment reliability, merchant trust, and onboarding conversion.',
+        description: 'Own workflow automation, customer trust, and onboarding conversion.',
         easyApply: false,
       },
     });
@@ -47,8 +47,8 @@ describe('app service saved jobs and material search', () => {
     expect(attempt?.jobPostingId).toBe(job.id);
     expect(attempt?.status).toBe('drafted');
     expect(attempt?.metadata).toMatchObject({
-      company: 'Checkout Co',
-      title: 'Product Manager, Payments',
+      company: 'Workflow Co',
+      title: 'Product Manager, Workflows',
       source: 'saved_job',
     });
 
@@ -65,11 +65,11 @@ describe('app service saved jobs and material search', () => {
       candidateId,
       input: {
         source: 'linkedin',
-        title: 'Product Manager, Payments',
-        company: 'Checkout Co',
-        location: 'Singapore',
+        title: 'Product Manager, Workflows',
+        company: 'Workflow Co',
+        location: 'Remote',
         url: 'https://www.linkedin.com/jobs/view/515151/',
-        description: 'Own payment reliability.',
+        description: 'Own workflow automation.',
       },
     });
     const [attempt] = await store.listAttempts(candidateId);
@@ -87,11 +87,11 @@ describe('app service saved jobs and material search', () => {
       candidateId,
       input: {
         source: 'linkedin',
-        title: 'Senior Product Manager, Payments',
-        company: 'Checkout Co',
-        location: 'Singapore',
+        title: 'Product Lead, Workflows',
+        company: 'Workflow Co',
+        location: 'Remote',
         url: 'https://www.linkedin.com/jobs/view/515151/',
-        description: 'Own payment reliability and merchant trust.',
+        description: 'Own workflow automation and customer trust.',
       },
     });
 
@@ -100,7 +100,7 @@ describe('app service saved jobs and material search', () => {
 
     expect(attempts).toHaveLength(1);
     expect(refreshedAttempt?.status).toBe('submitted');
-    expect(refreshedAttempt?.metadata.title).toBe('Senior Product Manager, Payments');
+    expect(refreshedAttempt?.metadata.title).toBe('Product Lead, Workflows');
   });
 
   it('keeps drafted saved jobs visible in Daily Picks for prep review', async () => {
@@ -123,13 +123,13 @@ describe('app service saved jobs and material search', () => {
       candidateId,
       input: {
         source: 'linkedin',
-        title: 'Senior Product Manager, Payments Platform',
-        company: 'Checkout Co',
-        location: 'Singapore',
+        title: 'Product Manager, Workflow Automation',
+        company: 'Workflow Co',
+        location: 'Remote',
         url: 'https://www.linkedin.com/jobs/view/616161/',
         description:
-          'Own payment platform strategy, KYC, AML, merchant onboarding, and compliance dashboards.',
-        salaryText: 'SGD 160k - 190k',
+          'Own workflow automation strategy, analytics dashboards, customer onboarding, and growth experiments.',
+        salaryText: 'USD 140k - 170k',
         easyApply: true,
       },
     });
@@ -161,13 +161,13 @@ describe('app service saved jobs and material search', () => {
       candidateId,
       input: {
         source: 'linkedin',
-        title: 'Senior Product Manager, Payments Platform',
-        company: 'Demo Checkout Co',
-        location: 'Singapore',
+        title: 'Product Manager, Workflow Automation',
+        company: 'Demo Workflow Co',
+        location: 'Remote',
         url: 'https://www.linkedin.com/jobs/view/717171/',
         description:
-          'Own payment platform strategy, KYC, AML, merchant onboarding, compliance dashboards, and growth experiments.',
-        salaryText: 'SGD 160k - 190k',
+          'Own workflow automation strategy, analytics dashboards, customer onboarding, reporting, and growth experiments.',
+        salaryText: 'USD 140k - 170k',
         easyApply: true,
       },
     });
@@ -215,6 +215,6 @@ describe('app service saved jobs and material search', () => {
     });
 
     expect(matches.length).toBeGreaterThan(0);
-    expect(matches.some((match) => match.reason.toLowerCase().includes('payments'))).toBe(true);
+    expect(matches.some((match) => match.reason.toLowerCase().includes('workflow'))).toBe(true);
   });
 });

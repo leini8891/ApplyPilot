@@ -224,36 +224,36 @@ Shows product judgment around operational reliability.
 
     await writeKnowledgeFile(
       tempDir,
-      'knowledge_base/stories/payments_platform_story.md',
-      `# Payments Platform Story
+      'knowledge_base/stories/workflow_automation_story.md',
+      `# Workflow Automation Story
 
 ## Context
 
-Use this story for payments platform and onboarding roles.
+Use this story for workflow automation and onboarding roles.
 
 ## Core facts
 
-- Improved payment reliability.
+- Improved onboarding completion.
 
 ## Interview value
 
-Shows practical judgment around payment operations.
+Shows practical judgment around workflow design and customer activation.
 
 ## Reusable answer points
 
-- Start with merchant trust and transaction reliability.
-- Connect controls, reconciliation, and support recovery.
+- Start with customer activation and operational repeatability.
+- Connect workflow templates, analytics, and support recovery.
 
 ## Related roles
 
-- Senior Product Manager, Payments
-- Payments Product Manager
+- Product Manager, Workflow Automation
+- Product Lead
 
 ## Tags
 
-- payments
-- KYC
-- merchant experience
+- workflow automation
+- analytics
+- onboarding
 `,
     );
 
@@ -294,8 +294,8 @@ Sales-focused.
     const matches = matchKnowledgeEntriesForJob({ entries, job, score });
 
     expect(matches).toHaveLength(1);
-    expect(matches[0]?.title).toBe('Payments Platform Story');
+    expect(matches[0]?.title).toBe('Workflow Automation Story');
     expect(matches[0]?.reason).toContain('Related role match');
-    expect(matches[0]?.answerPoints).toContain('Start with merchant trust and transaction reliability.');
+    expect(matches[0]?.answerPoints).toContain('Start with customer activation and operational repeatability.');
   });
 });

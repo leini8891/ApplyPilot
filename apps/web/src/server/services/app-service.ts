@@ -439,7 +439,7 @@ const buildDailyPick = ({
   knowledgeMatches: KnowledgeMatch[];
 }): DailyPick => {
   const fitSignals = [
-    `${score.overall}% V0 match from role, keyword, skill, location, salary, and application-friction signals`,
+    `${score.overall}% match from role, keyword, skill, location, salary, and application-friction signals`,
     ...score.reasons.slice(0, 4),
     hasTargetRoleMatch(job, profile) && profile.targetRoles[0]
       ? `Title overlaps with target roles like ${profile.targetRoles[0]}`
@@ -830,12 +830,12 @@ export const startRun = async ({
   const stagedJobs = jobs?.length ? jobs : [
     {
       source,
-      title: 'Senior Product Manager, Growth',
-      company: 'Aspire',
-      location: 'Singapore',
+      title: 'Product Manager, Growth',
+      company: 'Demo Growth Co',
+      location: 'Remote',
       url: 'https://www.linkedin.com/jobs/view/999/',
       description:
-        'Own product growth loops, subscription experiments, CRM and fintech user journeys.',
+        'Own product growth loops, subscription experiments, CRM workflows, and analytics journeys.',
       easyApply: true,
       detectedQuestions: ['How many years of B2B SaaS experience do you have?'],
     },
@@ -947,8 +947,8 @@ const buildWorkflowChecklist = ({
       label: 'Review role fit',
       detail:
         score.overall >= 55
-          ? `${score.overall}% V0 fit with ${score.reasons.slice(0, 2).join('; ')}`
-          : `${score.overall}% V0 fit. Review before investing time.`,
+          ? `${score.overall}% fit with ${score.reasons.slice(0, 2).join('; ')}`
+          : `${score.overall}% fit. Review before investing time.`,
       state: score.overall >= 55 ? 'ready' : 'needs_input',
     },
     {

@@ -1,6 +1,6 @@
 # ApplyPilot Demo Flow
 
-This demo shows the portfolio-ready V0 loop:
+This demo shows the portfolio-ready loop:
 
 ```text
 save job -> score role -> retrieve prep assets -> prepare checklist -> sync tracker record
@@ -54,12 +54,12 @@ curl -X POST http://localhost:3000/api/jobs/save \
   -H 'Content-Type: application/json' \
   --data '{
     "source": "linkedin",
-    "title": "Senior Product Manager, Payments Platform",
-    "company": "Demo Payments Co",
-    "location": "Singapore",
-    "url": "https://example.com/jobs/demo-payments-platform",
-    "description": "Own payment platform strategy for checkout, KYC, AML, compliance dashboards, data insights, growth experiments, merchant onboarding, and cross-functional delivery.",
-    "salaryText": "SGD 160k - 190k",
+    "title": "Product Manager, Workflow Automation",
+    "company": "Demo Workflow Co",
+    "location": "Remote",
+    "url": "https://example.com/jobs/demo-workflow-automation",
+    "description": "Own workflow automation strategy for onboarding, analytics dashboards, growth experiments, reporting, customer activation, and cross-functional delivery.",
+    "salaryText": "USD 140k - 170k",
     "employmentType": "Full-time",
     "easyApply": true
   }'
@@ -76,7 +76,7 @@ http://localhost:3000/picks
 Expected result:
 
 - the saved role appears in the shortlist
-- match reasons mention payments/product/skill/location signals
+- match reasons mention workflow/product/skill/location signals
 - `Prep assets` includes relevant resume evidence and story/playbook entries
 
 ## 5. Check Application Tracker
@@ -115,4 +115,4 @@ pnpm build
 pnpm lint
 ```
 
-The stable V0 currently covers 21 tests, including knowledge-base Markdown/JSON parsing, private local knowledge reading, retrieval, workflow preparation, and tracker sync.
+The stable workflow currently covers 21 tests, including knowledge-base Markdown/JSON parsing, private local knowledge reading, retrieval, workflow preparation, and tracker sync.

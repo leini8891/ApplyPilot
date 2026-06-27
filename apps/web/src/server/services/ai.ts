@@ -56,6 +56,79 @@ const inferLikelyNameFromResumeText = (text: string) => {
   return '';
 };
 
+const EXPERIENCE_PATTERN = /\b(\d{1,2})\+?\s*(?:years?|yrs?)\b/i;
+const ROLE_TITLE_PATTERN =
+  /\b(product manager|project manager|program manager|software engineer|data analyst|data scientist|business analyst|designer|marketer|sales|consultant|operations manager|founder|head of|director|lead)\b/i;
+const COMMON_LOCATIONS = [
+  'Singapore',
+  'United States',
+  'United Kingdom',
+  'Canada',
+  'Australia',
+  'Hong Kong',
+  'China',
+  'India',
+  'Japan',
+  'Germany',
+  'France',
+  'Netherlands',
+  'Remote',
+] as const;
+const INDUSTRY_PATTERNS: Array<[string, RegExp]> = [
+  ['Fintech', /\bfintech\b/i],
+  ['Payments', /\bpayments?\b/i],
+  ['SaaS', /\bsaas\b/i],
+  ['AI', /\b(ai|artificial intelligence|machine learning|ml)\b/i],
+  ['Crypto', /\b(crypto|web3|blockchain)\b/i],
+  ['E-commerce', /\b(e-?commerce|marketplace)\b/i],
+  ['Healthcare', /\b(healthcare|health tech|medtech)\b/i],
+  ['Education', /\b(edtech|education)\b/i],
+  ['Gaming', /\b(gaming|games)\b/i],
+];
+
+const inferYearsExperience = (text: string) => {
+  const match = text.match(EXPERIENCE_PATTERN);
+  const years = match ? Number(match[1]) : 0;
+
+  return Number.isFinite(years) ? years : 0;
+};
+
+const inferLocationFromHeader = (header: string) => {
+  const normalizedHeader = header.toLowerCase();
+  const matchedLocation = COMMON_LOCATIONS.find((location) =>
+    normalizedHeader.includes(location.toLowerCase()),
+  );
+
+  if (matchedLocation) {
+    return matchedLocation;
+  }
+
+  if (/\busa?\b/i.test(header)) {
+    return 'United States';
+  }
+
+  if (/\buk\b/i.test(header)) {
+    return 'United Kingdom';
+  }
+
+  return '';
+};
+
+const inferTargetRolesFromResumeText = (lines: string[]) =>
+  [
+    ...new Set(
+      lines
+        .slice(0, 40)
+        .map((line) => line.replace(/\s+/g, ' ').trim())
+        .filter((line) => line.length >= 4 && line.length <= 80)
+        .filter((line) => ROLE_TITLE_PATTERN.test(line))
+        .filter((line) => !/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(line)),
+    ),
+  ].slice(0, 5);
+
+const inferIndustriesFromResumeText = (text: string) =>
+  INDUSTRY_PATTERNS.filter(([, pattern]) => pattern.test(text)).map(([industry]) => industry);
+
 const sanitizeCandidateProfile = (candidateId: string, resumeText: string, profile: CandidateProfile) => {
   const inferredName = inferLikelyNameFromResumeText(resumeText);
   const safeFullName =
@@ -91,13 +164,13 @@ const fallbackParseProfile = (candidateId: string, text: string): CandidateProfi
     fullName: inferredName,
     email,
     phone,
-    location: header.includes('Singapore') ? 'Singapore' : '',
-    yearsExperience: text.includes('12 years') ? 12 : 8,
+    location: inferLocationFromHeader(header),
+    yearsExperience: inferYearsExperience(text),
     summary: lines.slice(0, 3).join(' '),
     workExperiences: [],
     skills,
-    targetRoles: ['Senior Product Manager', 'Lead Product Manager'],
-    industries: ['Fintech'],
+    targetRoles: inferTargetRolesFromResumeText(lines),
+    industries: inferIndustriesFromResumeText(text),
     education: [],
     lastParsedAt: new Date().toISOString(),
   }));

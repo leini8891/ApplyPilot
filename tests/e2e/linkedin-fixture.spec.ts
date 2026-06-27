@@ -12,7 +12,6 @@ test('mocked LinkedIn fixture exposes Easy Apply structure', async ({ page }) =>
   await page.setContent(html);
 
   await expect(page.locator('button.jobs-apply-button')).toHaveText('Easy Apply');
-  await expect(page.locator('.jobs-description__content')).toContainText('payments roadmap');
+  await expect(page.locator('.jobs-description__content')).toContainText('workflow automation roadmap');
   await expect(page.locator('li.jobs-search-results__list-item')).toHaveCount(2);
 });
-

@@ -30,12 +30,12 @@
   <text x="118" y="330" fill="#71584a" font-family="Arial, sans-serif" font-size="15">Knowledge Base</text>
 
   <text x="326" y="116" fill="#1b6b5c" font-family="Arial, sans-serif" font-size="14" font-weight="700" letter-spacing="3">APPLICATION</text>
-  <text x="326" y="156" fill="#27180d" font-family="Arial, sans-serif" font-size="31" font-weight="700">Senior Product Manager</text>
-  <text x="326" y="190" fill="#27180d" font-family="Arial, sans-serif" font-size="31" font-weight="700">Payments Platform</text>
-  <text x="326" y="222" fill="#71584a" font-family="Arial, sans-serif" font-size="17">Demo Payments Co - Singapore - Drafted</text>
+  <text x="326" y="156" fill="#27180d" font-family="Arial, sans-serif" font-size="31" font-weight="700">Product Manager</text>
+  <text x="326" y="190" fill="#27180d" font-family="Arial, sans-serif" font-size="31" font-weight="700">Workflow Automation</text>
+  <text x="326" y="222" fill="#71584a" font-family="Arial, sans-serif" font-size="17">Demo Workflow Co - Remote - Drafted</text>
 
   <rect x="326" y="254" width="286" height="88" rx="20" fill="#ffffff" stroke="#dfcdb7"/>
-  <text x="352" y="288" fill="#71584a" font-family="Arial, sans-serif" font-size="14">V0 MATCH</text>
+  <text x="352" y="288" fill="#71584a" font-family="Arial, sans-serif" font-size="14">MATCH</text>
   <text x="352" y="320" fill="#1b6b5c" font-family="Arial, sans-serif" font-size="32" font-weight="700">74% fit</text>
   <rect x="632" y="254" width="286" height="88" rx="20" fill="#ffffff" stroke="#dfcdb7"/>
   <text x="658" y="288" fill="#71584a" font-family="Arial, sans-serif" font-size="14">TRACKER STATE</text>
@@ -69,7 +69,7 @@
   <rect x="696" y="372" width="222" height="178" rx="22" fill="#fbf4ea" stroke="#dfcdb7"/>
   <text x="722" y="410" fill="#27180d" font-family="Arial, sans-serif" font-size="21" font-weight="700">Matched assets</text>
   <text x="722" y="452" fill="#1b6b5c" font-family="Arial, sans-serif" font-size="15" font-weight="700">RESUME EVIDENCE</text>
-  <text x="722" y="480" fill="#71584a" font-family="Arial, sans-serif" font-size="16">Payments reliability</text>
+  <text x="722" y="480" fill="#71584a" font-family="Arial, sans-serif" font-size="16">Workflow rollout</text>
   <text x="722" y="508" fill="#1b6b5c" font-family="Arial, sans-serif" font-size="15" font-weight="700">STORY ASSET</text>
-  <text x="722" y="536" fill="#71584a" font-family="Arial, sans-serif" font-size="16">AML reporting playbook</text>
+  <text x="722" y="536" fill="#71584a" font-family="Arial, sans-serif" font-size="16">Analytics playbook</text>
 </svg>

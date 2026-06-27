@@ -80,7 +80,7 @@ export const jobPreferenceSchema = z.object({
   industries: z.array(z.string()).default([]),
   regions: z.array(z.string()).default([]),
   minSalary: z.number().min(0).default(0),
-  salaryCurrency: z.string().default('SGD'),
+  salaryCurrency: z.string().default('USD'),
   dailyTarget: z.number().int().min(1).max(50).default(25),
   vipCompanies: z.array(z.string()).max(5).default([]),
   remotePolicy: z.enum(['any', 'hybrid', 'remote']).default('any'),
@@ -198,4 +198,3 @@ export const dashboardSummarySchema = z.object({
   recentResult: z.string().default(''),
 });
 export type DashboardSummary = z.infer<typeof dashboardSummarySchema>;
-

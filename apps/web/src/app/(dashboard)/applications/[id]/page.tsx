@@ -91,7 +91,7 @@ export default async function ApplicationDetailPage({
 
       {workflow ? (
         <SectionCard
-          description={`${workflow.score.overall}% V0 match. ${workflow.score.recommendedAction} recommended by the current scoring model.`}
+          description={`${workflow.score.overall}% match. ${workflow.score.recommendedAction} recommended by the current scoring model.`}
           eyebrow="Workflow"
           title="Application checklist"
         >
