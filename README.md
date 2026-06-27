@@ -11,7 +11,8 @@ ApplyPilot turns a resume, a sanitized local knowledge base, and saved job posts
 [![Chrome Extension](https://img.shields.io/badge/Chrome-MV3-4285F4?logo=googlechrome&logoColor=white)](https://developer.chrome.com/docs/extensions/mv3/intro/)
 [![Supabase](https://img.shields.io/badge/Supabase-optional-3FCF8E?logo=supabase&logoColor=white)](https://supabase.com/)
 [![pnpm](https://img.shields.io/badge/pnpm-monorepo-F69220?logo=pnpm&logoColor=white)](https://pnpm.io/)
-[![Tests](https://img.shields.io/badge/tests-21%20passing-brightgreen)](#verification)
+[![CI](https://github.com/leini8891/ApplyPilot/actions/workflows/ci.yml/badge.svg)](https://github.com/leini8891/ApplyPilot/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 </div>
 
@@ -185,6 +186,10 @@ This is a complete portfolio-ready V0 of the knowledge-backed job-search workflo
 - Keep public and private knowledge separated.
 
 The next logical branch can focus on tailored output generation: selected resume bullets, a cover-note draft, and a richer application timeline.
+
+## License
+
+Released under the [MIT License](LICENSE).
 
 ---
 
