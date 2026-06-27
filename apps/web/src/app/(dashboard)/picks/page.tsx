@@ -192,11 +192,17 @@ export default async function DailyPicksPage() {
                 ) : null}
 
                 <div className="pick-footer">
-                  <a className="primary-button" href={pick.job.url} rel="noreferrer" target="_blank">
+                  <Link
+                    className="primary-button"
+                    href={pick.applicationId ? `/applications/${pick.applicationId}` : '/applications'}
+                  >
+                    Prepare application
+                  </Link>
+                  <a className="ghost-link" href={pick.job.url} rel="noreferrer" target="_blank">
                     Open role
                   </a>
                   <p className="muted-copy">
-                    Use this as a shortlist, then apply manually and track the outcome in your board.
+                    Matched assets are ready for the tracker workflow.
                   </p>
                 </div>
               </article>

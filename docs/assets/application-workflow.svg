@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="720" viewBox="0 0 1040 720" role="img" aria-labelledby="title desc">
+  <title id="title">ApplyPilot application workflow demo</title>
+  <desc id="desc">A sanitized product screenshot-style illustration showing a job application checklist with resume evidence and story assets.</desc>
+  <defs>
+    <linearGradient id="page" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f8f3ea"/>
+      <stop offset="100%" stop-color="#efe1ca"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1b6b5c"/>
+      <stop offset="100%" stop-color="#0f5044"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#4e3214" flood-opacity="0.14"/>
+    </filter>
+  </defs>
+
+  <rect width="1040" height="720" fill="url(#page)"/>
+  <rect x="58" y="58" width="924" height="604" rx="30" fill="#fffaf1" stroke="#d8c3a8" filter="url(#shadow)"/>
+
+  <rect x="58" y="58" width="228" height="604" rx="30" fill="#f4eadb"/>
+  <text x="92" y="112" fill="#27180d" font-family="Arial, sans-serif" font-size="30" font-weight="700">ApplyPilot</text>
+  <text x="92" y="142" fill="#71584a" font-family="Arial, sans-serif" font-size="15">Local-first job search</text>
+
+  <rect x="92" y="198" width="160" height="38" rx="19" fill="#e6d7c3"/>
+  <text x="118" y="222" fill="#71584a" font-family="Arial, sans-serif" font-size="15">Daily Picks</text>
+  <rect x="92" y="252" width="160" height="38" rx="19" fill="#1b6b5c" opacity="0.14"/>
+  <text x="118" y="276" fill="#1b6b5c" font-family="Arial, sans-serif" font-size="15" font-weight="700">Applications</text>
+  <rect x="92" y="306" width="160" height="38" rx="19" fill="#e6d7c3"/>
+  <text x="118" y="330" fill="#71584a" font-family="Arial, sans-serif" font-size="15">Knowledge Base</text>
+
+  <text x="326" y="116" fill="#1b6b5c" font-family="Arial, sans-serif" font-size="14" font-weight="700" letter-spacing="3">APPLICATION</text>
+  <text x="326" y="156" fill="#27180d" font-family="Arial, sans-serif" font-size="31" font-weight="700">Senior Product Manager</text>
+  <text x="326" y="190" fill="#27180d" font-family="Arial, sans-serif" font-size="31" font-weight="700">Payments Platform</text>
+  <text x="326" y="222" fill="#71584a" font-family="Arial, sans-serif" font-size="17">Demo Payments Co - Singapore - Drafted</text>
+
+  <rect x="326" y="254" width="286" height="88" rx="20" fill="#ffffff" stroke="#dfcdb7"/>
+  <text x="352" y="288" fill="#71584a" font-family="Arial, sans-serif" font-size="14">V0 MATCH</text>
+  <text x="352" y="320" fill="#1b6b5c" font-family="Arial, sans-serif" font-size="32" font-weight="700">74% fit</text>
+  <rect x="632" y="254" width="286" height="88" rx="20" fill="#ffffff" stroke="#dfcdb7"/>
+  <text x="658" y="288" fill="#71584a" font-family="Arial, sans-serif" font-size="14">TRACKER STATE</text>
+  <text x="658" y="320" fill="#aa6a17" font-family="Arial, sans-serif" font-size="32" font-weight="700">queued</text>
+
+  <rect x="326" y="372" width="340" height="178" rx="22" fill="#ffffff" stroke="#dfcdb7"/>
+  <text x="352" y="410" fill="#27180d" font-family="Arial, sans-serif" font-size="23" font-weight="700">Application checklist</text>
+
+  <g font-family="Arial, sans-serif" font-size="17">
+    <circle cx="362" cy="450" r="10" fill="#1f7a52"/>
+    <text x="386" y="456" fill="#27180d">Review role fit</text>
+    <rect x="548" y="430" width="86" height="34" rx="17" fill="#e2f0e9"/>
+    <text x="570" y="452" fill="#1f7a52" font-size="14" font-weight="700">ready</text>
+
+    <circle cx="362" cy="494" r="10" fill="#1f7a52"/>
+    <text x="386" y="500" fill="#27180d">Pick resume evidence</text>
+    <rect x="548" y="474" width="86" height="34" rx="17" fill="#e2f0e9"/>
+    <text x="570" y="496" fill="#1f7a52" font-size="14" font-weight="700">ready</text>
+
+    <circle cx="362" cy="538" r="10" fill="#aa6a17"/>
+    <text x="386" y="544" fill="#27180d">Resolve watchouts</text>
+    <rect x="520" y="518" width="114" height="34" rx="17" fill="#f4e6d1"/>
+    <text x="544" y="540" fill="#aa6a17" font-size="14" font-weight="700">review</text>
+  </g>
+
+  <rect x="326" y="574" width="286" height="54" rx="27" fill="url(#accent)"/>
+  <text x="374" y="608" fill="#ffffff" font-family="Arial, sans-serif" font-size="17" font-weight="700">Prepare checklist</text>
+  <rect x="632" y="574" width="210" height="54" rx="27" fill="#eef4ef" stroke="#c9ddce"/>
+  <text x="686" y="608" fill="#1b6b5c" font-family="Arial, sans-serif" font-size="17" font-weight="700">Open role</text>
+
+  <rect x="696" y="372" width="222" height="178" rx="22" fill="#fbf4ea" stroke="#dfcdb7"/>
+  <text x="722" y="410" fill="#27180d" font-family="Arial, sans-serif" font-size="21" font-weight="700">Matched assets</text>
+  <text x="722" y="452" fill="#1b6b5c" font-family="Arial, sans-serif" font-size="15" font-weight="700">RESUME EVIDENCE</text>
+  <text x="722" y="480" fill="#71584a" font-family="Arial, sans-serif" font-size="16">Payments reliability</text>
+  <text x="722" y="508" fill="#1b6b5c" font-family="Arial, sans-serif" font-size="15" font-weight="700">STORY ASSET</text>
+  <text x="722" y="536" fill="#71584a" font-family="Arial, sans-serif" font-size="16">AML reporting playbook</text>
+</svg>

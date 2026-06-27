@@ -16,7 +16,7 @@ const bodyFont = Source_Sans_3({
 
 export const metadata: Metadata = {
   title: 'ApplyPilot',
-  description: 'LinkedIn-first job application copilot',
+  description: 'Local-first job-search cockpit with matching, prep assets, and application tracking',
 };
 
 export default function RootLayout({

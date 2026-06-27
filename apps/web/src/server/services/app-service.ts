@@ -55,6 +55,7 @@ export type ResumeMaterialMatch = {
 export type DailyPick = {
   job: JobPosting;
   score: MatchScore;
+  applicationId: string | null;
   fitSignals: string[];
   watchouts: string[];
   sourceLabel: string;
@@ -72,6 +73,24 @@ export type DailyPicksSnapshot = {
   profile: CandidateProfile | null;
   preference: JobPreference | null;
   setupRequired: boolean;
+};
+
+export type ApplicationWorkflowChecklistItem = {
+  id: string;
+  label: string;
+  detail: string;
+  state: 'ready' | 'needs_input' | 'blocked';
+};
+
+export type ApplicationWorkflow = {
+  applicationId: string;
+  preparedAt: string | null;
+  job: JobPosting;
+  score: MatchScore;
+  checklist: ApplicationWorkflowChecklistItem[];
+  resumeMatches: ResumeMaterialMatch[];
+  knowledgeMatches: KnowledgeMatch[];
+  nextActions: string[];
 };
 
 export const getCandidateId = (explicitCandidateId?: string) => explicitCandidateId ?? defaultCandidateId;
@@ -405,6 +424,7 @@ const buildDailyPick = ({
   profile,
   preference,
   score,
+  applicationId,
   fromSavedPool,
   resumeMatches,
   knowledgeMatches,
@@ -413,6 +433,7 @@ const buildDailyPick = ({
   profile: CandidateProfile;
   preference: JobPreference;
   score: MatchScore;
+  applicationId: string | null;
   fromSavedPool: boolean;
   resumeMatches: ResumeMaterialMatch[];
   knowledgeMatches: KnowledgeMatch[];
@@ -446,6 +467,7 @@ const buildDailyPick = ({
   return {
     job,
     score,
+    applicationId,
     fitSignals: fitSignals.length > 0 ? fitSignals : ['Profile overlap looks promising'],
     watchouts,
     sourceLabel: fromSavedPool ? `${job.source} saved pool` : `${job.source} sample pool`,
@@ -489,6 +511,7 @@ export const getDailyPicks = async (
   const savedPool = dedupeJobs(
     jobs.filter((job) => !hiddenJobIds.has(job.id) && !isSyntheticJob(job)),
   );
+  const applicationIdByJobId = new Map(attempts.map((attempt) => [attempt.jobPostingId, attempt.id]));
 
   const combinedPool = savedPool;
 
@@ -512,6 +535,7 @@ export const getDailyPicks = async (
         profile,
         preference,
         score,
+        applicationId: applicationIdByJobId.get(job.id) ?? null,
         fromSavedPool: true,
         resumeMatches,
         knowledgeMatches,
@@ -885,6 +909,249 @@ export const startRun = async ({
     run,
     attempts,
     plans,
+  };
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const getPreparedAtFromMetadata = (metadata: Record<string, unknown>) => {
+  const workflow = metadata.applicationWorkflow;
+
+  if (!isRecord(workflow)) {
+    return null;
+  }
+
+  return typeof workflow.preparedAt === 'string' ? workflow.preparedAt : null;
+};
+
+const buildWorkflowChecklist = ({
+  attempt,
+  job,
+  score,
+  resumeMatches,
+  knowledgeMatches,
+}: {
+  attempt: ApplicationAttempt;
+  job: JobPosting;
+  score: MatchScore;
+  resumeMatches: ResumeMaterialMatch[];
+  knowledgeMatches: KnowledgeMatch[];
+}): ApplicationWorkflowChecklistItem[] => {
+  const hasUsefulDescription = job.description.trim().split(/\s+/).filter(Boolean).length >= 8;
+  const hasWatchouts = score.gaps.length > 0;
+
+  return [
+    {
+      id: 'role-review',
+      label: 'Review role fit',
+      detail:
+        score.overall >= 55
+          ? `${score.overall}% V0 fit with ${score.reasons.slice(0, 2).join('; ')}`
+          : `${score.overall}% V0 fit. Review before investing time.`,
+      state: score.overall >= 55 ? 'ready' : 'needs_input',
+    },
+    {
+      id: 'job-context',
+      label: 'Confirm job context',
+      detail: hasUsefulDescription
+        ? `Job summary captured for ${job.company}.`
+        : 'Paste a fuller job description before tailoring answers.',
+      state: hasUsefulDescription ? 'ready' : 'needs_input',
+    },
+    {
+      id: 'resume-evidence',
+      label: 'Pick resume evidence',
+      detail:
+        resumeMatches.length > 0
+          ? `${resumeMatches.length} resume evidence item${resumeMatches.length === 1 ? '' : 's'} matched.`
+          : 'No resume evidence matched yet. Add resume text or adjust keywords.',
+      state: resumeMatches.length > 0 ? 'ready' : 'needs_input',
+    },
+    {
+      id: 'story-assets',
+      label: 'Attach story assets',
+      detail:
+        knowledgeMatches.length > 0
+          ? `${knowledgeMatches.length} story/playbook asset${knowledgeMatches.length === 1 ? '' : 's'} ready.`
+          : 'No story or playbook asset matched yet.',
+      state: knowledgeMatches.length > 0 ? 'ready' : 'needs_input',
+    },
+    {
+      id: 'watchouts',
+      label: 'Resolve watchouts',
+      detail: hasWatchouts ? score.gaps.slice(0, 3).join('; ') : 'No major watchouts from current filters.',
+      state: hasWatchouts ? 'needs_input' : 'ready',
+    },
+    {
+      id: 'application-channel',
+      label: 'Open application channel',
+      detail: job.easyApply
+        ? 'Quick apply signal captured. Open the role and confirm the live form.'
+        : 'Manual apply flow expected. Keep tracker open while applying.',
+      state: job.url ? 'ready' : 'blocked',
+    },
+    {
+      id: 'tracker-state',
+      label: 'Update tracker state',
+      detail:
+        attempt.status === 'drafted'
+          ? 'Preparing this workflow will move the card to queued.'
+          : `Current tracker state: ${attempt.status.replace('_', ' ')}.`,
+      state: 'ready',
+    },
+  ];
+};
+
+const buildWorkflowNextActions = ({
+  attempt,
+  job,
+  checklist,
+}: {
+  attempt: ApplicationAttempt;
+  job: JobPosting;
+  checklist: ApplicationWorkflowChecklistItem[];
+}) => {
+  const blockers = checklist.filter((item) => item.state !== 'ready');
+
+  if (attempt.status === 'submitted') {
+    return ['Save the receipt or confirmation screenshot.', 'Watch for recruiter response and move to viewed/interview when needed.'];
+  }
+
+  if (attempt.status === 'interview') {
+    return ['Open interview notes and prepare role-specific stories.', 'Keep the application card linked to follow-up notes.'];
+  }
+
+  if (attempt.status === 'needs_review') {
+    return ['Resolve the review note before applying.', 'Move the card back to queued once the blocker is clear.'];
+  }
+
+  if (blockers.length > 0) {
+    return [
+      `Resolve ${blockers.length} checklist item${blockers.length === 1 ? '' : 's'} before submitting.`,
+      'Add missing job context, resume evidence, or story assets if needed.',
+    ];
+  }
+
+  return [
+    `Open ${job.source} role page and apply manually.`,
+    'After submitting, move this card to submitted and attach a receipt if available.',
+  ];
+};
+
+export const getApplicationWorkflow = async ({
+  candidateId,
+  applicationId,
+}: {
+  candidateId: string;
+  applicationId: string;
+}): Promise<ApplicationWorkflow> => {
+  const detail = await store.getApplicationDetail(candidateId, applicationId);
+
+  if (!detail || !detail.job) {
+    throw new Error('Application not found.');
+  }
+
+  const [profile, preference, resumes, knowledgeEntries] = await Promise.all([
+    store.getProfile(candidateId),
+    store.getPreferences(candidateId),
+    store.listResumes(candidateId),
+    getKnowledgeBaseEntries(),
+  ]);
+
+  if (!profile || !preference) {
+    throw new Error('Upload a resume and save job preferences before preparing applications.');
+  }
+
+  const score = scoreJobAgainstPreferences(profile, preference, detail.job);
+  const resumeMatches = matchResumeMaterialsForJob({
+    profile,
+    resumes,
+    job: detail.job,
+    score,
+    limit: 4,
+  });
+  const knowledgeMatches = matchKnowledgeEntriesForJob({
+    entries: knowledgeEntries,
+    job: detail.job,
+    score,
+    limit: 4,
+  });
+  const checklist = buildWorkflowChecklist({
+    attempt: detail.attempt,
+    job: detail.job,
+    score,
+    resumeMatches,
+    knowledgeMatches,
+  });
+
+  return {
+    applicationId,
+    preparedAt: getPreparedAtFromMetadata(detail.attempt.metadata),
+    job: detail.job,
+    score,
+    checklist,
+    resumeMatches,
+    knowledgeMatches,
+    nextActions: buildWorkflowNextActions({
+      attempt: detail.attempt,
+      job: detail.job,
+      checklist,
+    }),
+  };
+};
+
+export const prepareApplicationWorkflow = async ({
+  candidateId,
+  applicationId,
+}: {
+  candidateId: string;
+  applicationId: string;
+}) => {
+  const detail = await store.getApplicationDetail(candidateId, applicationId);
+
+  if (!detail || !detail.job) {
+    throw new Error('Application not found.');
+  }
+
+  const workflow = await getApplicationWorkflow({
+    candidateId,
+    applicationId,
+  });
+  const preparedAt = new Date().toISOString();
+  const nextStatus = detail.attempt.status === 'drafted' ? 'queued' : detail.attempt.status;
+  const metadata = {
+    ...detail.attempt.metadata,
+    company: detail.job.company,
+    title: detail.job.title,
+    platform: detail.job.source,
+    jobUrl: detail.job.url,
+    applicationWorkflow: {
+      version: 1,
+      preparedAt,
+      scoreOverall: workflow.score.overall,
+      recommendedAction: workflow.score.recommendedAction,
+      checklist: workflow.checklist,
+      resumeMatches: workflow.resumeMatches,
+      knowledgeMatches: workflow.knowledgeMatches,
+      nextActions: workflow.nextActions,
+    },
+  };
+
+  await store.saveMatchScore(workflow.score);
+  const application = await store.saveAttempt({
+    ...detail.attempt,
+    status: nextStatus,
+    metadata,
+    updatedAt: preparedAt,
+  });
+
+  return {
+    application,
+    workflow: {
+      ...workflow,
+      preparedAt,
+    },
   };
 };
 

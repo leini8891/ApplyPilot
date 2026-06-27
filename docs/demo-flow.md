@@ -3,7 +3,7 @@
 This demo shows the portfolio-ready V0 loop:
 
 ```text
-save job -> score role -> retrieve prep assets -> sync tracker record
+save job -> score role -> retrieve prep assets -> prepare checklist -> sync tracker record
 ```
 
 It runs with the default in-memory store. No Supabase or OpenAI key is required.
@@ -93,7 +93,21 @@ Expected result:
 - the initial status is `drafted`
 - saving the same job again does not reset an existing tracker status
 
-## 6. Verify
+## 6. Prepare the Application Workflow
+
+Open the application detail page from the tracker or Daily Picks:
+
+```text
+http://localhost:3000/applications/attempt_1
+```
+
+Expected result:
+
+- the workflow checklist includes role fit, job context, resume evidence, story assets, watchouts, application channel, and tracker state
+- matched resume proof points and knowledge-base stories appear under the checklist
+- preparing the checklist stores workflow metadata and can move a drafted application to `queued`
+
+## 7. Verify
 
 ```bash
 pnpm test
@@ -101,4 +115,4 @@ pnpm build
 pnpm lint
 ```
 
-The stable V0 currently covers 20 tests, including knowledge-base Markdown/JSON parsing, private local knowledge reading, retrieval, and tracker sync.
+The stable V0 currently covers 21 tests, including knowledge-base Markdown/JSON parsing, private local knowledge reading, retrieval, workflow preparation, and tracker sync.

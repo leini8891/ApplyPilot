@@ -392,6 +392,37 @@ button {
   margin-bottom: 6px;
 }
 
+.workflow-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-top: 18px;
+}
+
+.workflow-status-select {
+  max-width: 220px;
+}
+
+.workflow-checklist {
+  display: grid;
+  gap: 12px;
+}
+
+.workflow-checklist-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.workflow-checklist-item:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
 .empty-state {
   border: 1px dashed rgba(83, 52, 24, 0.18);
   border-radius: 20px;

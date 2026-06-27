@@ -8,8 +8,10 @@ import {
 
 import {
   getDashboardData,
+  getApplicationWorkflow,
   getDailyPicks,
   matchResumeMaterialsForJob,
+  prepareApplicationWorkflow,
   saveManualJob,
   updateApplicationStatus,
 } from '../apps/web/src/server/services/app-service';
@@ -137,6 +139,69 @@ describe('app service saved jobs and material search', () => {
     expect(dailyPicks.setupRequired).toBe(false);
     expect(dailyPicks.picks.some((pick) => pick.job.id === job.id)).toBe(true);
     expect(dailyPicks.picks[0]?.resumeMatches.length).toBeGreaterThan(0);
+  });
+
+  it('prepares a checklist workflow and advances drafted applications to queued', async () => {
+    await store.clearCandidateData(candidateId);
+    await store.upsertProfile({
+      ...demoCandidateProfile,
+      id: candidateId,
+    });
+    await store.upsertPreferences({
+      ...demoPreferences,
+      candidateId,
+    });
+    await store.saveResume({
+      ...demoResume,
+      id: 'resume_app_service_workflow',
+      candidateId,
+    });
+
+    await saveManualJob({
+      candidateId,
+      input: {
+        source: 'linkedin',
+        title: 'Senior Product Manager, Payments Platform',
+        company: 'Demo Checkout Co',
+        location: 'Singapore',
+        url: 'https://www.linkedin.com/jobs/view/717171/',
+        description:
+          'Own payment platform strategy, KYC, AML, merchant onboarding, compliance dashboards, and growth experiments.',
+        salaryText: 'SGD 160k - 190k',
+        easyApply: true,
+      },
+    });
+
+    const [attempt] = await store.listAttempts(candidateId);
+
+    if (!attempt) {
+      throw new Error('Expected synced application attempt.');
+    }
+
+    const preview = await getApplicationWorkflow({
+      candidateId,
+      applicationId: attempt.id,
+    });
+
+    expect(attempt.status).toBe('drafted');
+    expect(preview.preparedAt).toBeNull();
+    expect(preview.checklist.some((item) => item.id === 'resume-evidence')).toBe(true);
+    expect(preview.resumeMatches.length).toBeGreaterThan(0);
+    expect(preview.knowledgeMatches.length).toBeGreaterThan(0);
+
+    const prepared = await prepareApplicationWorkflow({
+      candidateId,
+      applicationId: attempt.id,
+    });
+    const detail = await store.getApplicationDetail(candidateId, attempt.id);
+    const workflowMetadata = detail?.attempt.metadata.applicationWorkflow;
+
+    expect(prepared.application.status).toBe('queued');
+    expect(prepared.workflow.preparedAt).toEqual(expect.any(String));
+    expect(workflowMetadata).toMatchObject({
+      version: 1,
+      scoreOverall: prepared.workflow.score.overall,
+    });
   });
 
   it('retrieves resume material for a scored job', () => {

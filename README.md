@@ -4,14 +4,14 @@
 
 **A local-first AI job-search cockpit for matching roles, retrieving career stories, and tracking applications.**
 
-ApplyPilot turns a resume, a sanitized local knowledge base, and saved job posts into a daily shortlist with concrete prep assets: resume evidence, reusable stories, answer playbooks, and tracker records.
+ApplyPilot turns a resume, a sanitized local knowledge base, and saved job posts into a daily shortlist with concrete prep assets: resume evidence, reusable stories, answer playbooks, application checklists, and tracker records.
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Next.js](https://img.shields.io/badge/Next.js-15-000000?logo=nextdotjs&logoColor=white)](https://nextjs.org/)
 [![Chrome Extension](https://img.shields.io/badge/Chrome-MV3-4285F4?logo=googlechrome&logoColor=white)](https://developer.chrome.com/docs/extensions/mv3/intro/)
 [![Supabase](https://img.shields.io/badge/Supabase-optional-3FCF8E?logo=supabase&logoColor=white)](https://supabase.com/)
 [![pnpm](https://img.shields.io/badge/pnpm-monorepo-F69220?logo=pnpm&logoColor=white)](https://pnpm.io/)
-[![Tests](https://img.shields.io/badge/tests-20%20passing-brightgreen)](#verification)
+[![Tests](https://img.shields.io/badge/tests-21%20passing-brightgreen)](#verification)
 
 </div>
 
@@ -21,7 +21,7 @@ ApplyPilot turns a resume, a sanitized local knowledge base, and saved job posts
 
 Most job-search tools stop at keyword matching or blind auto-apply. ApplyPilot is built for the slower, more useful middle layer: deciding which roles are worth attention, finding the strongest evidence for each role, and keeping the application pipeline organized without leaking private notes into Git.
 
-This version moves the center of gravity from browser automation alone to the part that can be reliable every day: local knowledge ingestion, retrieval, scoring, prep assets, and tracker sync. The LinkedIn/MyCareersFuture extension remains an assisted apply layer, while the core product now works as a usable job-search cockpit even when no external services are configured.
+This version moves the center of gravity from browser automation alone to the part that can be reliable every day: local knowledge ingestion, retrieval, scoring, prep assets, application workflow preparation, and tracker sync. The LinkedIn/MyCareersFuture extension remains an assisted apply layer, while the core product now works as a usable job-search cockpit even when no external services are configured.
 
 The product is intentionally single-user and local-first:
 
@@ -36,6 +36,10 @@ The product is intentionally single-user and local-first:
 | --- | --- | --- |
 | ![Knowledge Base](docs/assets/knowledge-base.png) | ![Daily Picks](docs/assets/daily-picks.png) | ![Application Tracker](docs/assets/application-tracker.png) |
 
+### Application Workflow V0
+
+![Application Workflow](docs/assets/application-workflow.svg)
+
 ## What It Does
 
 | Capability | What it means |
@@ -44,6 +48,7 @@ The product is intentionally single-user and local-first:
 | Resume and story retrieval | Retrieves resume evidence plus reusable stories, interview notes, job profiles, and answer playbooks for a role. |
 | Local Markdown/JSON knowledge base | Reads structured Markdown, JSON sidecars, standalone JSON entries, and private local-only entries. |
 | Daily Picks | Ranks saved jobs and attaches prep assets under each role so review starts with evidence, not a blank page. |
+| Application workflow V0 | Turns a saved role into a human-reviewable checklist with matched resume evidence, story assets, next actions, and tracker state. |
 | Application tracker sync | Manual job saves create `drafted` tracker records, and repeat saves do not reset existing statuses. |
 | Human-in-the-loop automation | The Chrome extension can assist LinkedIn and MyCareersFuture flows, while risky cases route to review. |
 
@@ -57,7 +62,8 @@ flowchart LR
   PrivateKB["local_workspace/knowledge_base_private/"] --> Retrieve
   Match --> Picks["Daily Picks"]
   Retrieve --> Picks
-  Picks --> Tracker["Application tracker"]
+  Picks --> Workflow["Application workflow checklist"]
+  Workflow --> Tracker["Application tracker"]
   Tracker --> Notes["Interview notes and reusable stories"]
   Notes --> PublicKB
 ```
@@ -67,6 +73,7 @@ flowchart LR
 3. ApplyPilot scores the role and retrieves relevant evidence from resume text and the local knowledge base.
 4. The job appears in Daily Picks with `Prep assets`.
 5. The same saved job is synced into Application tracker as a `drafted` application record.
+6. Open the application detail page to prepare a checklist, review evidence, and advance tracker state.
 
 See [docs/demo-flow.md](docs/demo-flow.md) for a reproducible local demo.
 
@@ -153,12 +160,12 @@ For a persistent database-backed setup, copy `.env.example` to `.env.local`, fil
 ## Verification
 
 ```bash
-pnpm test    # 20 tests covering scoring, KB parsing/retrieval, tracker sync, store behavior
+pnpm test    # 21 tests covering scoring, KB parsing/retrieval, workflow prep, tracker sync, store behavior
 pnpm build   # production build for all workspace packages
 pnpm lint    # typecheck and lint
 ```
 
-The current portfolio packaging lives on `codex/resume-story-search`.
+The current portfolio packaging lives on `codex/application-workflow-v0-new`.
 
 ## Privacy Boundary
 
@@ -173,10 +180,11 @@ This is a complete portfolio-ready V0 of the knowledge-backed job-search workflo
 - Match saved jobs.
 - Retrieve resume evidence and career-story assets.
 - Attach prep assets to Daily Picks.
-- Sync saved jobs into Application tracker.
+- Prepare an application checklist from matched materials.
+- Sync saved jobs and workflow state into Application tracker.
 - Keep public and private knowledge separated.
 
-The next logical branch is `codex/application-workflow-v0`, which would add an end-to-end application prep packet: selected evidence, tailored resume draft, cover note/checklist, and application detail timeline.
+The next logical branch can focus on tailored output generation: selected resume bullets, a cover-note draft, and a richer application timeline.
 
 ---
 
