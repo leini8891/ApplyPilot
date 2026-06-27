@@ -76,11 +76,18 @@ export type ResumeVersion = z.infer<typeof resumeVersionSchema>;
 
 export const jobPreferenceSchema = z.object({
   candidateId: z.string().min(1),
+  targetRoles: z.array(z.string()).default([]),
   keywords: z.array(z.string()).default([]),
   industries: z.array(z.string()).default([]),
   regions: z.array(z.string()).default([]),
   minSalary: z.number().min(0).default(0),
   salaryCurrency: z.string().default('USD'),
+  applicationSalaryAmount: z.number().min(0).default(0),
+  yearsExperienceOverride: z.number().min(0).nullable().default(null),
+  noticePeriodWeeks: z.number().min(0).nullable().default(null),
+  workAuthorization: z.enum(['yes', 'no', 'unknown']).default('unknown'),
+  requiresVisaSponsorship: z.enum(['yes', 'no', 'unknown']).default('unknown'),
+  willingToRelocate: z.enum(['yes', 'no', 'unknown']).default('unknown'),
   dailyTarget: z.number().int().min(1).max(50).default(25),
   vipCompanies: z.array(z.string()).max(5).default([]),
   remotePolicy: z.enum(['any', 'hybrid', 'remote']).default('any'),

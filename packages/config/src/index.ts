@@ -10,6 +10,7 @@ export const webEnvSchema = z.object({
   SUPABASE_STORAGE_BUCKET: z.string().default('applypilot-assets'),
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default('gpt-4.1-mini'),
+  APPLYPILOT_LOCAL_STORE_PATH: z.string().optional(),
   ENABLE_DEMO_DATA: z.string().optional().transform((value) => value !== 'false'),
 });
 

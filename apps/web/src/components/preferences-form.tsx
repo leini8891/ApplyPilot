@@ -12,11 +12,18 @@ type PreferencesFormProps = {
 export function PreferencesForm({ preference }: PreferencesFormProps) {
   const router = useRouter();
   const [formState, setFormState] = useState({
+    targetRoles: preference?.targetRoles.join(', ') ?? '',
     keywords: preference?.keywords.join(', ') ?? '',
     industries: preference?.industries.join(', ') ?? '',
     regions: preference?.regions.join(', ') ?? '',
     minSalary: String(preference?.minSalary ?? 120000),
     salaryCurrency: preference?.salaryCurrency ?? 'USD',
+    applicationSalaryAmount: String(preference?.applicationSalaryAmount ?? 0),
+    yearsExperienceOverride: String(preference?.yearsExperienceOverride ?? ''),
+    noticePeriodWeeks: String(preference?.noticePeriodWeeks ?? ''),
+    workAuthorization: preference?.workAuthorization ?? 'unknown',
+    requiresVisaSponsorship: preference?.requiresVisaSponsorship ?? 'unknown',
+    willingToRelocate: preference?.willingToRelocate ?? 'unknown',
     dailyTarget: String(preference?.dailyTarget ?? 25),
     vipCompanies: preference?.vipCompanies.join(', ') ?? '',
     remotePolicy: preference?.remotePolicy ?? 'any',
@@ -42,11 +49,20 @@ export function PreferencesForm({ preference }: PreferencesFormProps) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
+        targetRoles: formState.targetRoles.split(',').map((item) => item.trim()).filter(Boolean),
         keywords: formState.keywords.split(',').map((item) => item.trim()).filter(Boolean),
         industries: formState.industries.split(',').map((item) => item.trim()).filter(Boolean),
         regions: formState.regions.split(',').map((item) => item.trim()).filter(Boolean),
         minSalary: Number(formState.minSalary),
         salaryCurrency: formState.salaryCurrency,
+        applicationSalaryAmount: Number(formState.applicationSalaryAmount),
+        yearsExperienceOverride: formState.yearsExperienceOverride
+          ? Number(formState.yearsExperienceOverride)
+          : null,
+        noticePeriodWeeks: formState.noticePeriodWeeks ? Number(formState.noticePeriodWeeks) : null,
+        workAuthorization: formState.workAuthorization,
+        requiresVisaSponsorship: formState.requiresVisaSponsorship,
+        willingToRelocate: formState.willingToRelocate,
         dailyTarget: Number(formState.dailyTarget),
         vipCompanies: formState.vipCompanies.split(',').map((item) => item.trim()).filter(Boolean),
         remotePolicy: formState.remotePolicy,
@@ -66,6 +82,14 @@ export function PreferencesForm({ preference }: PreferencesFormProps) {
 
   return (
     <form className="stack-form" onSubmit={onSubmit}>
+      <label className="field">
+        <span>Target roles</span>
+        <textarea
+          onChange={(event) => update('targetRoles', event.target.value)}
+          rows={2}
+          value={formState.targetRoles}
+        />
+      </label>
       <label className="field">
         <span>Keywords</span>
         <textarea
@@ -125,6 +149,72 @@ export function PreferencesForm({ preference }: PreferencesFormProps) {
             <option value="any">Any</option>
             <option value="hybrid">Hybrid</option>
             <option value="remote">Remote</option>
+          </select>
+        </label>
+      </div>
+      <div className="field-grid">
+        <label className="field">
+          <span>Application salary answer</span>
+          <input
+            min={0}
+            onChange={(event) => update('applicationSalaryAmount', event.target.value)}
+            type="number"
+            value={formState.applicationSalaryAmount}
+          />
+        </label>
+        <label className="field">
+          <span>Years of experience answer</span>
+          <input
+            min={0}
+            onChange={(event) => update('yearsExperienceOverride', event.target.value)}
+            type="number"
+            value={formState.yearsExperienceOverride}
+          />
+        </label>
+      </div>
+      <div className="field-grid">
+        <label className="field">
+          <span>Notice period weeks</span>
+          <input
+            min={0}
+            onChange={(event) => update('noticePeriodWeeks', event.target.value)}
+            type="number"
+            value={formState.noticePeriodWeeks}
+          />
+        </label>
+        <label className="field">
+          <span>Work authorization</span>
+          <select
+            onChange={(event) => update('workAuthorization', event.target.value)}
+            value={formState.workAuthorization}
+          >
+            <option value="unknown">Unknown</option>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+        </label>
+      </div>
+      <div className="field-grid">
+        <label className="field">
+          <span>Visa sponsorship required</span>
+          <select
+            onChange={(event) => update('requiresVisaSponsorship', event.target.value)}
+            value={formState.requiresVisaSponsorship}
+          >
+            <option value="unknown">Unknown</option>
+            <option value="no">No</option>
+            <option value="yes">Yes</option>
+          </select>
+        </label>
+        <label className="field">
+          <span>Willing to relocate</span>
+          <select
+            onChange={(event) => update('willingToRelocate', event.target.value)}
+            value={formState.willingToRelocate}
+          >
+            <option value="unknown">Unknown</option>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
           </select>
         </label>
       </div>

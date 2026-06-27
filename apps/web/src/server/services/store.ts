@@ -1,3 +1,8 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
+import { z } from 'zod';
+
 import {
   buildDashboardSummary,
   demoAttempts,
@@ -48,6 +53,23 @@ type MemoryStore = {
   assets: Record<string, { bytes: string; contentType: string }>;
 };
 
+const memoryStoreSchema = z.object({
+  profiles: z.array(candidateProfileSchema).default([]),
+  resumes: z.array(resumeVersionSchema).default([]),
+  preferences: z.array(jobPreferenceSchema).default([]),
+  jobs: z.array(jobPostingSchema).default([]),
+  scores: z.array(matchScoreSchema).default([]),
+  tailoredResumes: z.array(tailoredResumeSchema).default([]),
+  runs: z.array(applicationRunSchema).default([]),
+  attempts: z.array(applicationAttemptSchema).default([]),
+  reviews: z.array(reviewQueueItemSchema).default([]),
+  interviews: z.array(interviewRecordSchema).default([]),
+  assets: z.record(z.object({
+    bytes: z.string(),
+    contentType: z.string(),
+  })).default({}),
+});
+
 type ApplicationDetail = {
   attempt: ApplicationAttempt;
   run: ApplicationRun | null;
@@ -77,7 +99,62 @@ const createSeedStore = (): MemoryStore => ({
   assets: {},
 });
 
-const memoryStore = globalThis.__applypilotStore ?? createSeedStore();
+const findWorkspaceRoot = (startDir: string) => {
+  let currentDir = startDir;
+
+  while (true) {
+    if (fs.existsSync(path.join(currentDir, 'pnpm-workspace.yaml'))) {
+      return currentDir;
+    }
+
+    const parentDir = path.dirname(currentDir);
+    if (parentDir === currentDir) {
+      return startDir;
+    }
+    currentDir = parentDir;
+  }
+};
+
+const localStorePath =
+  env.APPLYPILOT_LOCAL_STORE_PATH?.trim() ||
+  path.join(
+    findWorkspaceRoot(process.cwd()),
+    process.env.VITEST ? '.codex_tmp' : 'local_workspace',
+    process.env.VITEST
+      ? `applypilot-store-test-${process.env.VITEST_WORKER_ID ?? '0'}.json`
+      : 'applypilot-store.json',
+  );
+
+const loadLocalStore = () => {
+  try {
+    if (!fs.existsSync(localStorePath)) {
+      return null;
+    }
+
+    return memoryStoreSchema.parse(JSON.parse(fs.readFileSync(localStorePath, 'utf8')));
+  } catch (error) {
+    console.warn(`[store] Could not load ${localStorePath}. Falling back to seeded memory store.`, error);
+    return null;
+  }
+};
+
+let localStoreWriteWarningShown = false;
+
+const persistMemoryStore = () => {
+  try {
+    fs.mkdirSync(path.dirname(localStorePath), { recursive: true });
+    const tmpPath = `${localStorePath}.tmp`;
+    fs.writeFileSync(tmpPath, `${JSON.stringify(memoryStoreSchema.parse(memoryStore), null, 2)}\n`);
+    fs.renameSync(tmpPath, localStorePath);
+  } catch (error) {
+    if (!localStoreWriteWarningShown) {
+      localStoreWriteWarningShown = true;
+      console.warn(`[store] Could not persist ${localStorePath}. Continuing in memory.`, error);
+    }
+  }
+};
+
+const memoryStore = globalThis.__applypilotStore ?? loadLocalStore() ?? createSeedStore();
 globalThis.__applypilotStore = memoryStore;
 
 const tableMap = {
@@ -138,11 +215,18 @@ const mapRow = {
   preference: (row: Record<string, unknown>): JobPreference =>
     jobPreferenceSchema.parse({
       candidateId: row.candidate_id,
+      targetRoles: row.target_roles,
       keywords: row.keywords,
       industries: row.industries,
       regions: row.regions,
       minSalary: row.min_salary,
       salaryCurrency: row.salary_currency,
+      applicationSalaryAmount: row.application_salary_amount,
+      yearsExperienceOverride: row.years_experience_override,
+      noticePeriodWeeks: row.notice_period_weeks,
+      workAuthorization: row.work_authorization,
+      requiresVisaSponsorship: row.requires_visa_sponsorship,
+      willingToRelocate: row.willing_to_relocate,
       dailyTarget: row.daily_target,
       vipCompanies: row.vip_companies,
       remotePolicy: row.remote_policy,
@@ -388,6 +472,7 @@ export const store = {
       memoryStore.profiles.unshift(clone(profile));
     }
 
+    persistMemoryStore();
     return profile;
   },
   async listResumes(candidateId: string) {
@@ -439,6 +524,7 @@ export const store = {
       memoryStore.resumes.unshift(clone(resume));
     }
 
+    persistMemoryStore();
     return resume;
   },
   async getPreferences(candidateId: string) {
@@ -471,11 +557,18 @@ export const store = {
     if (isDbMode(supabase)) {
       const { error } = await supabase.from(tableMap.preferences).upsert({
         candidate_id: preference.candidateId,
+        target_roles: preference.targetRoles,
         keywords: preference.keywords,
         industries: preference.industries,
         regions: preference.regions,
         min_salary: preference.minSalary,
         salary_currency: preference.salaryCurrency,
+        application_salary_amount: preference.applicationSalaryAmount,
+        years_experience_override: preference.yearsExperienceOverride,
+        notice_period_weeks: preference.noticePeriodWeeks,
+        work_authorization: preference.workAuthorization,
+        requires_visa_sponsorship: preference.requiresVisaSponsorship,
+        willing_to_relocate: preference.willingToRelocate,
         daily_target: preference.dailyTarget,
         vip_companies: preference.vipCompanies,
         remote_policy: preference.remotePolicy,
@@ -496,6 +589,7 @@ export const store = {
       memoryStore.preferences.unshift(clone(preference));
     }
 
+    persistMemoryStore();
     return preference;
   },
   async saveJob(job: JobPosting) {
@@ -530,6 +624,7 @@ export const store = {
       memoryStore.jobs.unshift(clone(job));
     }
 
+    persistMemoryStore();
     return job;
   },
   async listJobs() {
@@ -580,6 +675,7 @@ export const store = {
       memoryStore.scores.unshift(clone(score));
     }
 
+    persistMemoryStore();
     return score;
   },
   async saveTailoredResume(tailoredResume: TailoredResume) {
@@ -610,6 +706,7 @@ export const store = {
       memoryStore.tailoredResumes.unshift(clone(tailoredResume));
     }
 
+    persistMemoryStore();
     return tailoredResume;
   },
   async listTailoredResumes(candidateId: string) {
@@ -660,6 +757,7 @@ export const store = {
     }
 
     memoryStore.runs.unshift(clone(run));
+    persistMemoryStore();
     return run;
   },
   async listRuns(candidateId: string) {
@@ -716,6 +814,7 @@ export const store = {
       memoryStore.attempts.unshift(clone(attempt));
     }
 
+    persistMemoryStore();
     return attempt;
   },
   async listAttempts(candidateId: string) {
@@ -790,6 +889,7 @@ export const store = {
     }
 
     memoryStore.reviews.unshift(clone(item));
+    persistMemoryStore();
     return item;
   },
   async listReviewQueue(candidateId: string) {
@@ -845,6 +945,7 @@ export const store = {
       memoryStore.interviews.unshift(clone(interview));
     }
 
+    persistMemoryStore();
     return interview;
   },
   async listInterviews(candidateId: string) {
@@ -946,6 +1047,7 @@ export const store = {
       }
     });
 
+    persistMemoryStore();
     return true;
   },
   async storeBinaryAsset({
@@ -983,6 +1085,7 @@ export const store = {
       contentType,
     };
 
+    persistMemoryStore();
     return {
       storagePath: path,
       publicUrl: createLocalObjectUrl(path),

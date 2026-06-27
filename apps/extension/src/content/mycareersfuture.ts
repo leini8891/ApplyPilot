@@ -13,18 +13,26 @@ type BootstrapPayload = {
   summary: {
     dailyTarget: number;
   };
-  profile: {
-    fullName: string;
-    phone: string;
-    email: string;
-    location: string;
-  } | null;
-  preference?: {
-    regions?: string[];
-    minSalary?: number;
-    salaryCurrency?: string;
-  } | null;
-};
+	  profile: {
+	    fullName: string;
+	    phone: string;
+	    email: string;
+	    location: string;
+	    yearsExperience?: number;
+	  } | null;
+	  preference?: {
+	    targetRoles?: string[];
+	    regions?: string[];
+	    minSalary?: number;
+	    salaryCurrency?: string;
+	    applicationSalaryAmount?: number;
+	    yearsExperienceOverride?: number | null;
+	    noticePeriodWeeks?: number | null;
+	    workAuthorization?: 'yes' | 'no' | 'unknown';
+	    requiresVisaSponsorship?: 'yes' | 'no' | 'unknown';
+	    willingToRelocate?: 'yes' | 'no' | 'unknown';
+	  } | null;
+	};
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -238,41 +246,63 @@ const getPreferredLocationValue = ({
   profile: BootstrapPayload['profile'];
   preference?: BootstrapPayload['preference'] | null;
   jobLocation: string;
-}) =>
-  firstNonEmpty(
-    preference?.regions?.[0],
-    jobLocation,
-    profile?.location,
-    'Singapore',
-  );
+	}) =>
+	  firstNonEmpty(
+	    preference?.regions?.[0],
+	    jobLocation,
+	    profile?.location,
+	  );
 
 const getPreferredSalaryValue = (preference?: BootstrapPayload['preference'] | null) => {
-  if (typeof preference?.minSalary === 'number') {
+  if (preference?.applicationSalaryAmount && preference.applicationSalaryAmount > 0) {
+    return String(preference.applicationSalaryAmount);
+  }
+
+  if (preference?.minSalary && preference.minSalary > 0) {
     return String(preference.minSalary);
   }
 
-  return '10000';
+  return '';
 };
 
-const inferYearsAnswer = (context: string) => {
+const getPreferredYearsValue = (
+  preference?: BootstrapPayload['preference'] | null,
+  profile?: BootstrapPayload['profile'],
+) => {
+  const years = preference?.yearsExperienceOverride ?? profile?.yearsExperience ?? null;
+
+  return typeof years === 'number' && Number.isFinite(years) && years > 0 ? String(years) : '';
+};
+
+const getNoticePeriodValue = (preference?: BootstrapPayload['preference'] | null) => {
+  const weeks = preference?.noticePeriodWeeks;
+
+  return typeof weeks === 'number' && Number.isFinite(weeks) && weeks >= 0 ? String(weeks) : '';
+};
+
+const inferYearsAnswer = (
+  context: string,
+  preference?: BootstrapPayload['preference'] | null,
+  profile?: BootstrapPayload['profile'],
+) => {
   const normalized = normalizeToken(context);
   if (!normalized) {
     return '';
   }
 
   if (/notice period/.test(normalized)) {
-    return '2';
+    return getNoticePeriodValue(preference);
   }
 
   if (/salary|pay|compensation/.test(normalized)) {
-    return '10000';
+    return getPreferredSalaryValue(preference);
   }
 
   if (/year|experience/.test(normalized)) {
-    return '5';
+    return getPreferredYearsValue(preference, profile);
   }
 
-  return '1';
+  return '';
 };
 
 const fillKnownTextFields = ({
@@ -351,7 +381,13 @@ const getRadioLabelText = (radio: HTMLInputElement) =>
     ),
   );
 
-const chooseRadioCandidate = (radios: HTMLInputElement[]) => {
+const choiceTokens = (value?: 'yes' | 'no' | 'unknown') =>
+  value === 'yes' || value === 'no' ? [value] : [];
+
+const chooseRadioCandidate = (
+  radios: HTMLInputElement[],
+  preference?: BootstrapPayload['preference'] | null,
+) => {
   const questionText = normalizeToken(
     firstNonEmpty(
       textOf(radios[0]?.closest('fieldset')),
@@ -360,11 +396,19 @@ const chooseRadioCandidate = (radios: HTMLInputElement[]) => {
     ),
   );
 
-  const preferredTokens = /sponsor|sponsorship|visa|work authorization|work authorisation/.test(questionText)
-    ? ['no']
-    : /comfortable|onsite|on-site|willing|degree|education|completed/.test(questionText)
-      ? ['yes', 'no']
-      : ['yes', 'no'];
+  const preferredTokens = /sponsor|sponsorship|visa/.test(questionText)
+    ? choiceTokens(preference?.requiresVisaSponsorship)
+    : /work authorization|work authorisation|authorized to work|authorised to work/.test(questionText)
+      ? choiceTokens(preference?.workAuthorization)
+      : /relocat|willing to move/.test(questionText)
+        ? choiceTokens(preference?.willingToRelocate)
+        : /comfortable|onsite|on-site|willing|degree|education|completed/.test(questionText)
+          ? ['yes', 'no']
+          : ['yes', 'no'];
+
+  if (preferredTokens.length === 0) {
+    return null;
+  }
 
   for (const token of preferredTokens) {
     const candidate = radios.find((radio) => new RegExp(`\\b${token}\\b`).test(getRadioLabelText(radio)));
@@ -376,7 +420,13 @@ const chooseRadioCandidate = (radios: HTMLInputElement[]) => {
   return radios[0] ?? null;
 };
 
-const answerQuestions = () => {
+const answerQuestions = ({
+  profile,
+  preference,
+}: {
+  profile: BootstrapPayload['profile'];
+  preference?: BootstrapPayload['preference'] | null;
+}) => {
   const controls = getFormControls();
 
   controls.forEach((element) => {
@@ -391,7 +441,7 @@ const answerQuestions = () => {
       return;
     }
 
-    const candidate = chooseRadioCandidate(radios);
+    const candidate = chooseRadioCandidate(radios, preference);
     candidate?.click();
   });
 
@@ -404,13 +454,17 @@ const answerQuestions = () => {
       return;
     }
 
-    const inferred = inferYearsAnswer(getFieldContextText(element));
+    const inferred = inferYearsAnswer(getFieldContextText(element), preference, profile);
     if (inferred) {
       setFieldValue(element, inferred);
     }
   });
 
-  return controls.every((element) => {
+  const unresolvedRequiredRadioGroups = getRadioGroups().filter(
+    (radios) => radios.some((radio) => isRequiredControl(radio)) && !radios.some((radio) => radio.checked),
+  );
+
+  return unresolvedRequiredRadioGroups.length === 0 && controls.every((element) => {
     if (!isRequiredControl(element)) {
       return true;
     }
@@ -434,7 +488,7 @@ const fillCurrentStep = ({
 }) => {
   fillStandardFields(profile);
   fillKnownTextFields({ profile, preference, jobLocation });
-  return answerQuestions();
+  return answerQuestions({ profile, preference });
 };
 
 const uploadResumeIfNeeded = async ({

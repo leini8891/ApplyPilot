@@ -6,18 +6,26 @@ type BootstrapPayload = {
   summary: {
     dailyTarget: number;
   };
-  profile: {
-    fullName: string;
-    phone: string;
-    email: string;
-    location: string;
-  } | null;
-  preference?: {
-    regions?: string[];
-    minSalary?: number;
-    salaryCurrency?: string;
-  } | null;
-};
+	  profile: {
+	    fullName: string;
+	    phone: string;
+	    email: string;
+	    location: string;
+	    yearsExperience?: number;
+	  } | null;
+	  preference?: {
+	    targetRoles?: string[];
+	    regions?: string[];
+	    minSalary?: number;
+	    salaryCurrency?: string;
+	    applicationSalaryAmount?: number;
+	    yearsExperienceOverride?: number | null;
+	    noticePeriodWeeks?: number | null;
+	    workAuthorization?: 'yes' | 'no' | 'unknown';
+	    requiresVisaSponsorship?: 'yes' | 'no' | 'unknown';
+	    willingToRelocate?: 'yes' | 'no' | 'unknown';
+	  } | null;
+	};
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -1152,22 +1160,44 @@ const getPreferredLocationValue = ({
   );
 
 const getPreferredSalaryValue = (preference?: BootstrapPayload['preference'] | null) => {
-  if (!preference?.minSalary || preference.minSalary <= 0) {
-    return '';
+  if (preference?.applicationSalaryAmount && preference.applicationSalaryAmount > 0) {
+    return String(preference.applicationSalaryAmount);
   }
 
-  const monthly = Math.max(1, Math.round(preference.minSalary / 12));
-  return String(monthly);
+  if (preference?.minSalary && preference.minSalary > 0) {
+    return String(Math.max(1, Math.round(preference.minSalary / 12)));
+  }
+
+  return '';
 };
 
-const inferYearsAnswer = (context: string) => {
+const getPreferredYearsValue = (
+  preference?: BootstrapPayload['preference'] | null,
+  profile?: BootstrapPayload['profile'],
+) => {
+  const years = preference?.yearsExperienceOverride ?? profile?.yearsExperience ?? null;
+
+  return typeof years === 'number' && Number.isFinite(years) && years > 0 ? String(years) : '';
+};
+
+const getNoticePeriodValue = (preference?: BootstrapPayload['preference'] | null) => {
+  const weeks = preference?.noticePeriodWeeks;
+
+  return typeof weeks === 'number' && Number.isFinite(weeks) && weeks >= 0 ? String(weeks) : '';
+};
+
+const inferYearsAnswer = (
+  context: string,
+  preference?: BootstrapPayload['preference'] | null,
+  profile?: BootstrapPayload['profile'],
+) => {
   const normalized = normalizeToken(context);
 
   if (!/(years|experience|经验|多久)/.test(normalized)) {
     return '';
   }
 
-  return '8';
+  return getPreferredYearsValue(preference, profile);
 };
 
 const looksLikeSuspiciousFullName = (value: string) =>
@@ -1223,7 +1253,7 @@ const fillKnownTextFields = ({
       continue;
     }
 
-    const inferredYears = inferYearsAnswer(context);
+    const inferredYears = inferYearsAnswer(context, preference, profile);
     if (inferredYears && /^(number|text|tel|search|url|email)?$/i.test(control.type || 'text')) {
       setFieldValue(control, inferredYears);
     }
@@ -1290,7 +1320,13 @@ const getRadioLabelText = (radio: HTMLInputElement) =>
     ),
   );
 
-const chooseRadioCandidate = (radios: HTMLInputElement[]) => {
+const choiceTokens = (value?: 'yes' | 'no' | 'unknown') =>
+  value === 'yes' || value === 'no' ? [value] : [];
+
+const chooseRadioCandidate = (
+  radios: HTMLInputElement[],
+  preference?: BootstrapPayload['preference'] | null,
+) => {
   const questionText = normalizeToken(
     firstNonEmpty(
       textOf(radios[0]?.closest('fieldset')),
@@ -1299,11 +1335,19 @@ const chooseRadioCandidate = (radios: HTMLInputElement[]) => {
     ),
   );
 
-  const preferredTokens = /sponsor|sponsorship|visa|work authorization|work authorisation/.test(questionText)
-    ? ['no']
-    : /degree|education|bachelor|master|phd|completed|complete the following level/.test(questionText)
+  const preferredTokens = /sponsor|sponsorship|visa/.test(questionText)
+    ? choiceTokens(preference?.requiresVisaSponsorship)
+    : /work authorization|work authorisation|authorized to work|authorised to work/.test(questionText)
+      ? choiceTokens(preference?.workAuthorization)
+      : /relocat|willing to move/.test(questionText)
+        ? choiceTokens(preference?.willingToRelocate)
+        : /degree|education|bachelor|master|phd|completed|complete the following level/.test(questionText)
       ? ['yes']
       : ['yes', 'no'];
+
+  if (preferredTokens.length === 0) {
+    return null;
+  }
 
   for (const token of preferredTokens) {
     const candidate = radios.find((radio) => new RegExp(`\\b${token}\\b`).test(getRadioLabelText(radio)));
@@ -1339,6 +1383,7 @@ const getFallbackFieldValue = ({
   const context = getFieldContextText(element);
   const preferredLocation = getPreferredLocationValue({ profile, preference, jobLocation });
   const preferredSalary = getPreferredSalaryValue(preference);
+  const noticePeriod = getNoticePeriodValue(preference);
 
   if (/email/.test(context) && profile?.email) {
     return profile.email;
@@ -1353,22 +1398,22 @@ const getFallbackFieldValue = ({
   }
 
   if (/salary|compensation|pay|薪资|薪酬/.test(context)) {
-    return preferredSalary || '10000';
+    return preferredSalary;
   }
 
   if (/notice/.test(context)) {
-    return '2';
+    return noticePeriod;
   }
 
   if (/(years|experience|经验|多久)/.test(context)) {
-    return '8';
+    return inferYearsAnswer(context, preference, profile);
   }
 
   if (element instanceof HTMLInputElement && element.type === 'number') {
-    return '1';
+    return '';
   }
 
-  return '1';
+  return '';
 };
 
 const answerKnockoutQuestions = ({
@@ -1392,15 +1437,28 @@ const answerKnockoutQuestions = ({
   }
 
   const dialog = getEasyApplyDialog() ?? document;
+  const preferredYears = Number(getPreferredYearsValue(preference, profile));
   const requiredGroups = Array.from(dialog.querySelectorAll('fieldset')).filter((fieldset) =>
     isVisible(fieldset) &&
-    fieldset.textContent?.toLowerCase().includes('years'),
+    fieldset.textContent?.toLowerCase().includes('years') &&
+    Number.isFinite(preferredYears) &&
+    preferredYears > 0,
   );
 
   requiredGroups.forEach((group) => {
-    const preferred = group.querySelector<HTMLInputElement>(
-      'input[type="radio"][value*="5"], input[type="radio"][value*="10"]',
-    );
+    const preferred =
+      Array.from(group.querySelectorAll<HTMLInputElement>('input[type="radio"]'))
+        .map((radio) => {
+          const label = getRadioLabelText(radio);
+          const numericValue = Number(label.match(/\d+/)?.[0] ?? radio.value.match(/\d+/)?.[0] ?? NaN);
+          return {
+            radio,
+            numericValue,
+          };
+        })
+        .filter((candidate) => Number.isFinite(candidate.numericValue) && candidate.numericValue <= preferredYears)
+        .sort((left, right) => right.numericValue - left.numericValue)[0]?.radio ?? null;
+
     preferred?.click();
   });
 
@@ -1409,7 +1467,7 @@ const answerKnockoutQuestions = ({
       return;
     }
 
-    const candidate = chooseRadioCandidate(radios);
+    const candidate = chooseRadioCandidate(radios, preference);
     candidate?.click();
   });
 
@@ -1422,7 +1480,7 @@ const answerKnockoutQuestions = ({
       return;
     }
 
-    const inferredYears = inferYearsAnswer(getFieldContextText(element));
+    const inferredYears = inferYearsAnswer(getFieldContextText(element), preference, profile);
     if (inferredYears) {
       setFieldValue(element, inferredYears);
     }

@@ -6,7 +6,7 @@ This demo shows the portfolio-ready loop:
 save job -> score role -> retrieve prep assets -> prepare checklist -> sync tracker record
 ```
 
-It runs with the default in-memory store. No Supabase or OpenAI key is required.
+It runs with the default local JSON store. No Supabase or OpenAI key is required.
 
 ## 1. Start the App
 
@@ -38,6 +38,7 @@ The page reads entries from:
 - `local_workspace/knowledge_base_private` when present
 
 Public entries should be sanitized before committing. Private interview notes belong in `local_workspace/knowledge_base_private/`.
+Saved app data is written to `local_workspace/applypilot-store.json`.
 
 ## 3. Save a Demo Role
 

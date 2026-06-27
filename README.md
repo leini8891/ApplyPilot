@@ -28,7 +28,7 @@ The product is intentionally single-user and local-first:
 
 - Public-safe career stories live in `knowledge_base/`.
 - Private interview notes can live in `local_workspace/knowledge_base_private/`, which is ignored by Git.
-- The app works with an in-memory demo store by default, so it runs without Supabase or OpenAI.
+- The app works with a gitignored local JSON store by default, so it runs without Supabase or OpenAI.
 - AI calls have deterministic fallbacks, keeping the workflow usable without external services.
 
 ## Product Tour
@@ -156,7 +156,8 @@ pnpm dev:extension
 
 Open [http://localhost:3000](http://localhost:3000).
 
-For a persistent database-backed setup, copy `.env.example` to `.env.local`, fill in Supabase/OpenAI values as needed, and apply the SQL migrations under `supabase/migrations/`.
+Without Supabase, saved local data is written to `local_workspace/applypilot-store.json`.
+For a database-backed setup, copy `.env.example` to `.env.local`, fill in Supabase/OpenAI values as needed, and apply the SQL migrations under `supabase/migrations/`.
 
 ## Verification
 
@@ -170,7 +171,7 @@ pnpm lint    # typecheck and lint
 
 Commit only sanitized, reusable material under `knowledge_base/`. Keep private recruiter details, interview schedules, exact compensation expectations, personal documents, local resume paths, and sensitive application notes under `local_workspace/knowledge_base_private/`.
 
-`local_workspace/` is ignored by Git.
+`local_workspace/` is ignored by Git, including the fallback store at `local_workspace/applypilot-store.json`.
 
 ## Project Status
 

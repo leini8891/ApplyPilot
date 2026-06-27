@@ -166,8 +166,9 @@ export const scoreJobAgainstPreferences = (
   const jobText = buildJobText(job);
   const roleText = `${job.title} ${job.description}`;
   const preferenceIndustries = [...preferences.industries, ...profile.industries];
+  const targetRoles = [...preferences.targetRoles, ...profile.targetRoles];
   const keywordHits = buildKeywordCoverage(jobText, preferences.keywords);
-  const targetRoleHits = buildKeywordCoverage(roleText, profile.targetRoles);
+  const targetRoleHits = buildKeywordCoverage(roleText, targetRoles);
   const industryHits = buildKeywordCoverage(jobText, preferenceIndustries);
   const profileSkillHits = buildKeywordCoverage(jobText, profile.skills);
   const regionMatch = hasRegionMatch(job, preferences);
@@ -181,7 +182,7 @@ export const scoreJobAgainstPreferences = (
   const score =
     18 +
     scoreCoverage(keywordHits, preferences.keywords, 24) +
-    scoreCoverage(targetRoleHits, profile.targetRoles, 20) +
+    scoreCoverage(targetRoleHits, targetRoles, 20) +
     scoreCoverage(industryHits, preferenceIndustries, 12) +
     Math.min(18, profileSkillHits.length * 4) +
     (regionMatch ? 10 : -12) +

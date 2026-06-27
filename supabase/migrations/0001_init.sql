@@ -30,11 +30,18 @@ create table if not exists public.resume_versions (
 
 create table if not exists public.job_preferences (
   candidate_id text primary key references public.candidate_profiles(id) on delete cascade,
+  target_roles jsonb not null default '[]'::jsonb,
   keywords jsonb not null default '[]'::jsonb,
   industries jsonb not null default '[]'::jsonb,
   regions jsonb not null default '[]'::jsonb,
   min_salary integer not null default 0,
-  salary_currency text not null default 'SGD',
+  salary_currency text not null default 'USD',
+  application_salary_amount integer not null default 0,
+  years_experience_override integer,
+  notice_period_weeks integer,
+  work_authorization text not null default 'unknown',
+  requires_visa_sponsorship text not null default 'unknown',
+  willing_to_relocate text not null default 'unknown',
   daily_target integer not null default 25,
   vip_companies jsonb not null default '[]'::jsonb,
   remote_policy text not null default 'any',
@@ -256,4 +263,3 @@ create policy "interview records follow owning attempt"
 insert into storage.buckets (id, name, public)
 values ('applypilot-assets', 'applypilot-assets', true)
 on conflict (id) do nothing;
-

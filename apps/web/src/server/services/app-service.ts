@@ -218,8 +218,13 @@ const hasRegionMatch = (job: JobPosting, preference: JobPreference) =>
   preference.regions.length === 0 ||
   preference.regions.some((region) => job.location.toLowerCase().includes(region.toLowerCase()));
 
-const hasTargetRoleMatch = (job: JobPosting, profile: CandidateProfile) =>
-  profile.targetRoles.some((role) => job.title.toLowerCase().includes(role.toLowerCase()));
+const getTargetRoles = (profile: CandidateProfile, preference: JobPreference) => [
+  ...preference.targetRoles,
+  ...profile.targetRoles,
+];
+
+const hasTargetRoleMatch = (job: JobPosting, profile: CandidateProfile, preference: JobPreference) =>
+  getTargetRoles(profile, preference).some((role) => job.title.toLowerCase().includes(role.toLowerCase()));
 
 const dedupeJobs = (jobs: JobPosting[]) => {
   const seen = new Set<string>();
@@ -441,8 +446,8 @@ const buildDailyPick = ({
   const fitSignals = [
     `${score.overall}% match from role, keyword, skill, location, salary, and application-friction signals`,
     ...score.reasons.slice(0, 4),
-    hasTargetRoleMatch(job, profile) && profile.targetRoles[0]
-      ? `Title overlaps with target roles like ${profile.targetRoles[0]}`
+    hasTargetRoleMatch(job, profile, preference) && getTargetRoles(profile, preference)[0]
+      ? `Title overlaps with target roles like ${getTargetRoles(profile, preference)[0]}`
       : null,
     hasRegionMatch(job, preference) ? `Location fits your region filters` : null,
     job.salaryText ? `Salary listed: ${job.salaryText}` : null,

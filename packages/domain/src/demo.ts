@@ -62,11 +62,18 @@ export const demoResume: ResumeVersion = {
 
 export const demoPreferences: JobPreference = {
   candidateId: 'demo-user',
+  targetRoles: ['Product Manager', 'Product Lead'],
   keywords: ['workflow automation', 'analytics', 'growth', 'product strategy'],
   industries: ['b2b saas', 'analytics'],
   regions: ['remote'],
   minSalary: 120000,
   salaryCurrency: 'USD',
+  applicationSalaryAmount: 10000,
+  yearsExperienceOverride: 8,
+  noticePeriodWeeks: 2,
+  workAuthorization: 'unknown',
+  requiresVisaSponsorship: 'unknown',
+  willingToRelocate: 'unknown',
   dailyTarget: 25,
   vipCompanies: ['Demo Analytics Co'],
   remotePolicy: 'remote',
