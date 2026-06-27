@@ -116,4 +116,4 @@ pnpm build
 pnpm lint
 ```
 
-The stable workflow currently covers 21 tests, including knowledge-base Markdown/JSON parsing, private local knowledge reading, retrieval, workflow preparation, and tracker sync.
+The stable workflow currently covers 22 tests, including knowledge-base Markdown/JSON parsing, private local knowledge reading, retrieval, workflow preparation, and tracker sync.

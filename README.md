@@ -162,7 +162,7 @@ For a database-backed setup, copy `.env.example` to `.env.local`, fill in Supaba
 ## Verification
 
 ```bash
-pnpm test    # 21 tests covering scoring, KB parsing/retrieval, workflow prep, tracker sync, store behavior
+pnpm test    # 22 tests covering scoring, KB parsing/retrieval, workflow prep, tracker sync, store behavior
 pnpm build   # production build for all workspace packages
 pnpm lint    # typecheck and lint
 ```
