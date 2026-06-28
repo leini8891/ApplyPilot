@@ -15,6 +15,7 @@ import {
   saveManualJob,
   updateApplicationStatus,
 } from '../apps/web/src/server/services/app-service';
+import { searchJobsFromResume } from '../apps/web/src/server/services/resume-job-search';
 import { store } from '../apps/web/src/server/services/store';
 
 describe('app service saved jobs and material search', () => {
@@ -22,6 +23,7 @@ describe('app service saved jobs and material search', () => {
   const otherCandidateId = 'app-service-test-other-user';
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await store.clearCandidateData(candidateId);
     await store.clearCandidateData(otherCandidateId);
   });
@@ -241,6 +243,151 @@ describe('app service saved jobs and material search', () => {
     expect(workflowMetadata).toMatchObject({
       version: 1,
       scoreOverall: prepared.workflow.score.overall,
+    });
+  });
+
+  it('searches Adzuna jobs from a resume, ranks them, and syncs tracker items', async () => {
+    await store.clearCandidateData(candidateId);
+    await store.upsertProfile({
+      ...demoCandidateProfile,
+      id: candidateId,
+    });
+    await store.upsertPreferences({
+      ...demoPreferences,
+      candidateId,
+      targetRoles: ['Product Manager'],
+      keywords: ['workflow automation', 'analytics'],
+      regions: ['Singapore'],
+      easyApplyOnly: false,
+    });
+    await store.saveResume({
+      ...demoResume,
+      id: 'resume_app_service_adzuna_search',
+      candidateId,
+      parsedProfileId: candidateId,
+    });
+
+    const usageSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const fetchMock = vi.fn(async () =>
+      Response.json({
+        count: 2,
+        results: [
+          {
+            id: 'adzuna-low-fit',
+            title: 'Office Coordinator',
+            company: {
+              display_name: 'Admin Co',
+            },
+            location: {
+              display_name: 'Singapore',
+            },
+            redirect_url: 'https://www.adzuna.sg/details/low',
+            description: 'Coordinate office supplies and facilities.',
+            created: '2026-06-28T01:00:00Z',
+          },
+          {
+            id: 'adzuna-high-fit',
+            title: 'Product Manager, Workflow Automation',
+            company: {
+              display_name: 'Workflow Co',
+            },
+            location: {
+              display_name: 'Singapore',
+            },
+            redirect_url: 'https://www.adzuna.sg/details/high',
+            description:
+              'Own workflow automation, analytics dashboards, and product growth loops.',
+            created: '2026-06-28T02:00:00Z',
+          },
+        ],
+      }),
+    );
+
+    const result = await searchJobsFromResume({
+      candidateId,
+      resumeId: 'resume_app_service_adzuna_search',
+      limit: 1,
+      aggregatorConfig: {
+        appId: 'test-app',
+        appKey: 'test-key',
+        country: 'sg',
+        baseUrl: 'https://api.adzuna.test/v1/api',
+        fetchImpl: fetchMock as typeof fetch,
+      },
+      store,
+    });
+
+    expect(result.enabled).toBe(true);
+    expect(result.savedCount).toBe(1);
+    expect(result.savedJobs[0]?.job.company).toBe('Workflow Co');
+
+    const attempts = await store.listAttempts(candidateId);
+    const jobs = await store.listJobs(candidateId);
+    const usageEvents = usageSpy.mock.calls
+      .filter(([label]) => label === '[usage-meter]')
+      .map(([, payload]) => JSON.parse(String(payload)));
+
+    expect(attempts).toHaveLength(1);
+    expect(jobs.some((job) => job.company === 'Workflow Co')).toBe(true);
+    expect(jobs.some((job) => job.company === 'Admin Co')).toBe(false);
+    expect(usageEvents[0]).toMatchObject({
+      candidateId,
+      eventType: 'resume_job_search',
+      provider: 'adzuna',
+      searchCount: 1,
+      aiCallCount: 0,
+    });
+  });
+
+  it('records a disabled search usage event when Adzuna credentials are missing', async () => {
+    await store.clearCandidateData(candidateId);
+    await store.upsertProfile({
+      ...demoCandidateProfile,
+      id: candidateId,
+    });
+    await store.upsertPreferences({
+      ...demoPreferences,
+      candidateId,
+    });
+    await store.saveResume({
+      ...demoResume,
+      id: 'resume_app_service_adzuna_disabled',
+      candidateId,
+      parsedProfileId: candidateId,
+    });
+    const usageSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const fetchMock = vi.fn();
+
+    const result = await searchJobsFromResume({
+      candidateId,
+      resumeId: 'resume_app_service_adzuna_disabled',
+      aggregatorConfig: {
+        appId: '',
+        appKey: '',
+        fetchImpl: fetchMock as typeof fetch,
+      },
+      store,
+    });
+
+    const attempts = await store.listAttempts(candidateId);
+    const usageEvents = usageSpy.mock.calls
+      .filter(([label]) => label === '[usage-meter]')
+      .map(([, payload]) => JSON.parse(String(payload)));
+
+    expect(result).toMatchObject({
+      enabled: false,
+      provider: 'adzuna',
+      disabledReason: 'missing_api_key',
+      savedCount: 0,
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(attempts).toHaveLength(0);
+    expect(usageEvents[0]).toMatchObject({
+      candidateId,
+      eventType: 'resume_job_search_disabled',
+      provider: 'adzuna',
+      searchCount: 0,
+      aiCallCount: 0,
     });
   });
 

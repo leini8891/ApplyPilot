@@ -4,6 +4,7 @@ export const sourcePlatformSchema = z.enum([
   'linkedin',
   'mycareersfuture',
   'greenhouse',
+  'adzuna',
 ]);
 export type SourcePlatform = z.infer<typeof sourcePlatformSchema>;
 

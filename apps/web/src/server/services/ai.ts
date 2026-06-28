@@ -23,6 +23,8 @@ const createOpenAIClient = () => {
   });
 };
 
+export const isAiConfigured = () => Boolean(env.OPENAI_API_KEY);
+
 const parseJsonContent = <T>(value: string | null | undefined, fallback: T) => {
   if (!value) {
     return fallback;
