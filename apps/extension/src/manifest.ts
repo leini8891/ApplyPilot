@@ -9,6 +9,8 @@ export default defineManifest({
   host_permissions: [
     'https://www.linkedin.com/*',
     'https://www.mycareersfuture.gov.sg/*',
+    'https://boards.greenhouse.io/*',
+    'https://job-boards.greenhouse.io/*',
     'http://localhost:3000/*',
   ],
   background: {
@@ -28,6 +30,14 @@ export default defineManifest({
     {
       matches: ['https://www.mycareersfuture.gov.sg/*'],
       js: ['src/content/mycareersfuture.ts'],
+      run_at: 'document_idle',
+    },
+    {
+      matches: [
+        'https://boards.greenhouse.io/*',
+        'https://job-boards.greenhouse.io/*',
+      ],
+      js: ['src/content/greenhouse.ts'],
       run_at: 'document_idle',
     },
   ],

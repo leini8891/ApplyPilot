@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
-export const sourcePlatformSchema = z.enum(['linkedin', 'mycareersfuture']);
+export const sourcePlatformSchema = z.enum([
+  'linkedin',
+  'mycareersfuture',
+  'greenhouse',
+]);
 export type SourcePlatform = z.infer<typeof sourcePlatformSchema>;
 
 export const applicationStatusSchema = z.enum([

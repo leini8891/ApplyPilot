@@ -6,7 +6,7 @@ import { startRun } from '@/server/services/app-service';
 export async function POST(request: Request) {
   return withAuthenticatedRoute(request, async ({ candidateId }) => {
     const body = (await request.json()) as {
-      source?: 'linkedin' | 'mycareersfuture';
+      source?: 'linkedin' | 'mycareersfuture' | 'greenhouse';
       targetCount?: number;
       jobs?: Array<Partial<JobPosting>>;
     };

@@ -1,4 +1,8 @@
-import type { ExtensionMessage, PopupState, WorkerJobPlan } from '../shared/messages';
+import type {
+  ExtensionMessage,
+  PopupState,
+  WorkerJobPlan,
+} from '../shared/messages';
 import {
   detectMcfFlowStage,
   elementLabel,
@@ -6,6 +10,10 @@ import {
   isDisabledElement,
   isVisibleElement,
 } from './mycareersfuture-flow';
+import {
+  resolveChoiceQuestionAnswer,
+  resolveTextQuestionAnswer,
+} from './form-mapping';
 
 type JobPlan = WorkerJobPlan;
 
@@ -13,26 +21,26 @@ type BootstrapPayload = {
   summary: {
     dailyTarget: number;
   };
-	  profile: {
-	    fullName: string;
-	    phone: string;
-	    email: string;
-	    location: string;
-	    yearsExperience?: number;
-	  } | null;
-	  preference?: {
-	    targetRoles?: string[];
-	    regions?: string[];
-	    minSalary?: number;
-	    salaryCurrency?: string;
-	    applicationSalaryAmount?: number;
-	    yearsExperienceOverride?: number | null;
-	    noticePeriodWeeks?: number | null;
-	    workAuthorization?: 'yes' | 'no' | 'unknown';
-	    requiresVisaSponsorship?: 'yes' | 'no' | 'unknown';
-	    willingToRelocate?: 'yes' | 'no' | 'unknown';
-	  } | null;
-	};
+  profile: {
+    fullName: string;
+    phone: string;
+    email: string;
+    location: string;
+    yearsExperience?: number;
+  } | null;
+  preference?: {
+    targetRoles?: string[];
+    regions?: string[];
+    minSalary?: number;
+    salaryCurrency?: string;
+    applicationSalaryAmount?: number;
+    yearsExperienceOverride?: number | null;
+    noticePeriodWeeks?: number | null;
+    workAuthorization?: 'yes' | 'no' | 'unknown';
+    requiresVisaSponsorship?: 'yes' | 'no' | 'unknown';
+    willingToRelocate?: 'yes' | 'no' | 'unknown';
+  } | null;
+};
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -46,10 +54,14 @@ const contentScriptWindow = window as Window & {
   __applypilotMyCareersFutureAutoResumeStarted?: boolean;
 };
 
-const textOf = (element: Element | null | undefined) => element?.textContent?.trim() ?? '';
+const textOf = (element: Element | null | undefined) =>
+  element?.textContent?.trim() ?? '';
 const firstNonEmpty = (...values: Array<string | null | undefined>) =>
-  values.find((value) => typeof value === 'string' && value.trim().length > 0)?.trim() ?? '';
-const normalizeToken = (value: string) => value.toLowerCase().replace(/\s+/g, ' ').trim();
+  values
+    .find((value) => typeof value === 'string' && value.trim().length > 0)
+    ?.trim() ?? '';
+const normalizeToken = (value: string) =>
+  value.toLowerCase().replace(/\s+/g, ' ').trim();
 const normalizeDigits = (value: string) => value.replace(/[^\d]/g, '');
 const toAbsoluteUrl = (value: string) => {
   try {
@@ -69,14 +81,20 @@ const isTransientRuntimeMessageError = (error: unknown) => {
   );
 };
 
-const sendRuntimeMessage = async <TResponse>(message: ExtensionMessage, retries = 2) => {
+const sendRuntimeMessage = async <TResponse>(
+  message: ExtensionMessage,
+  retries = 2,
+) => {
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
       return (await chrome.runtime.sendMessage(message)) as TResponse;
     } catch (error) {
-      lastError = error instanceof Error ? error : new Error('ApplyPilot runtime messaging failed.');
+      lastError =
+        error instanceof Error
+          ? error
+          : new Error('ApplyPilot runtime messaging failed.');
       if (!isTransientRuntimeMessageError(error) || attempt === retries) {
         throw lastError;
       }
@@ -114,7 +132,8 @@ const fetchJson = async <T>(
     | undefined;
 
   if (!response || response.ok !== true) {
-    const errorMessage = response && 'error' in response ? response.error : undefined;
+    const errorMessage =
+      response && 'error' in response ? response.error : undefined;
     throw new Error(errorMessage ?? 'ApplyPilot API request failed.');
   }
 
@@ -127,25 +146,40 @@ const triggerElementClick = (element: HTMLElement) => {
     inline: 'center',
   });
   element.focus?.();
-  element.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true }));
-  element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-  element.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true }));
-  element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+  element.dispatchEvent(
+    new PointerEvent('pointerdown', { bubbles: true, cancelable: true }),
+  );
+  element.dispatchEvent(
+    new MouseEvent('mousedown', { bubbles: true, cancelable: true }),
+  );
+  element.dispatchEvent(
+    new PointerEvent('pointerup', { bubbles: true, cancelable: true }),
+  );
+  element.dispatchEvent(
+    new MouseEvent('mouseup', { bubbles: true, cancelable: true }),
+  );
   element.click();
 };
 
 const getVisibleDialogs = () =>
-  Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"], .modal, .drawer, .chakra-modal__content'))
-    .filter((dialog) => isVisible(dialog));
+  Array.from(
+    document.querySelectorAll<HTMLElement>(
+      '[role="dialog"], .modal, .drawer, .chakra-modal__content',
+    ),
+  ).filter((dialog) => isVisible(dialog));
 
 const getApplicationContainer = () => {
   const dialogs = getVisibleDialogs();
   if (dialogs.length > 0) {
-    return dialogs.sort((left, right) => {
-      const leftRect = left.getBoundingClientRect();
-      const rightRect = right.getBoundingClientRect();
-      return rightRect.width * rightRect.height - leftRect.width * leftRect.height;
-    })[0] ?? null;
+    return (
+      dialogs.sort((left, right) => {
+        const leftRect = left.getBoundingClientRect();
+        const rightRect = right.getBoundingClientRect();
+        return (
+          rightRect.width * rightRect.height - leftRect.width * leftRect.height
+        );
+      })[0] ?? null
+    );
   }
 
   return (
@@ -156,12 +190,13 @@ const getApplicationContainer = () => {
 
 const getFormControlsFor = (container: ParentNode) =>
   Array.from(
-    container.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
-      'input, select, textarea',
-    ),
+    container.querySelectorAll<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >('input, select, textarea'),
   ).filter((element) => isVisible(element) && !element.disabled);
 
-const getFormControls = () => getFormControlsFor(getApplicationContainer() ?? document);
+const getFormControls = () =>
+  getFormControlsFor(getApplicationContainer() ?? document);
 
 const getFieldContextText = (
   element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement,
@@ -170,16 +205,30 @@ const getFieldContextText = (
     firstNonEmpty(
       element.getAttribute('aria-label'),
       element.getAttribute('placeholder'),
-      element.id ? textOf(document.querySelector(`label[for="${CSS.escape(element.id)}"]`)) : '',
+      element.id
+        ? textOf(
+            document.querySelector(`label[for="${CSS.escape(element.id)}"]`),
+          )
+        : '',
       textOf(element.closest('label')),
       textOf(element.closest('fieldset')?.querySelector('legend')),
-      textOf(element.closest('[data-testid], [class*="field"], [class*="input"], [class*="question"]')),
+      textOf(
+        element.closest(
+          '[data-testid], [class*="field"], [class*="input"], [class*="question"]',
+        ),
+      ),
       element.name,
     ),
   );
 
-const setFieldValue = (element: HTMLInputElement | HTMLTextAreaElement, value: string) => {
-  const descriptor = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(element), 'value')?.set;
+const setFieldValue = (
+  element: HTMLInputElement | HTMLTextAreaElement,
+  value: string,
+) => {
+  const descriptor = Object.getOwnPropertyDescriptor(
+    Object.getPrototypeOf(element),
+    'value',
+  )?.set;
   descriptor?.call(element, value);
   element.dispatchEvent(new Event('input', { bubbles: true }));
   element.dispatchEvent(new Event('change', { bubbles: true }));
@@ -201,7 +250,12 @@ const fillStandardFields = (profile: BootstrapPayload['profile']) => {
   const lastName = restNames.join(' ');
 
   for (const control of controls) {
-    if (!(control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement)) {
+    if (
+      !(
+        control instanceof HTMLInputElement ||
+        control instanceof HTMLTextAreaElement
+      )
+    ) {
       continue;
     }
 
@@ -231,7 +285,10 @@ const fillStandardFields = (profile: BootstrapPayload['profile']) => {
       continue;
     }
 
-    if (/last name|family name|surname/.test(context) && (lastName || firstName)) {
+    if (
+      /last name|family name|surname/.test(context) &&
+      (lastName || firstName)
+    ) {
       setFieldValue(control, lastName || firstName);
       continue;
     }
@@ -246,64 +303,15 @@ const getPreferredLocationValue = ({
   profile: BootstrapPayload['profile'];
   preference?: BootstrapPayload['preference'] | null;
   jobLocation: string;
-	}) =>
-	  firstNonEmpty(
-	    preference?.regions?.[0],
-	    jobLocation,
-	    profile?.location,
-	  );
+}) => firstNonEmpty(preference?.regions?.[0], jobLocation, profile?.location);
 
-const getPreferredSalaryValue = (preference?: BootstrapPayload['preference'] | null) => {
-  if (preference?.applicationSalaryAmount && preference.applicationSalaryAmount > 0) {
-    return String(preference.applicationSalaryAmount);
-  }
-
-  if (preference?.minSalary && preference.minSalary > 0) {
-    return String(preference.minSalary);
-  }
-
-  return '';
-};
-
-const getPreferredYearsValue = (
-  preference?: BootstrapPayload['preference'] | null,
-  profile?: BootstrapPayload['profile'],
-) => {
-  const years = preference?.yearsExperienceOverride ?? profile?.yearsExperience ?? null;
-
-  return typeof years === 'number' && Number.isFinite(years) && years > 0 ? String(years) : '';
-};
-
-const getNoticePeriodValue = (preference?: BootstrapPayload['preference'] | null) => {
-  const weeks = preference?.noticePeriodWeeks;
-
-  return typeof weeks === 'number' && Number.isFinite(weeks) && weeks >= 0 ? String(weeks) : '';
-};
-
-const inferYearsAnswer = (
+const resolveMcfTextAnswer = (
   context: string,
   preference?: BootstrapPayload['preference'] | null,
-  profile?: BootstrapPayload['profile'],
-) => {
-  const normalized = normalizeToken(context);
-  if (!normalized) {
-    return '';
-  }
-
-  if (/notice period/.test(normalized)) {
-    return getNoticePeriodValue(preference);
-  }
-
-  if (/salary|pay|compensation/.test(normalized)) {
-    return getPreferredSalaryValue(preference);
-  }
-
-  if (/year|experience/.test(normalized)) {
-    return getPreferredYearsValue(preference, profile);
-  }
-
-  return '';
-};
+) =>
+  resolveTextQuestionAnswer(context, preference, {
+    salaryFallbackPeriod: 'annual',
+  });
 
 const fillKnownTextFields = ({
   profile,
@@ -314,11 +322,19 @@ const fillKnownTextFields = ({
   preference?: BootstrapPayload['preference'] | null;
   jobLocation: string;
 }) => {
-  const preferredLocation = getPreferredLocationValue({ profile, preference, jobLocation });
-  const preferredSalary = getPreferredSalaryValue(preference);
+  const preferredLocation = getPreferredLocationValue({
+    profile,
+    preference,
+    jobLocation,
+  });
 
   for (const control of getFormControls()) {
-    if (!(control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement)) {
+    if (
+      !(
+        control instanceof HTMLInputElement ||
+        control instanceof HTMLTextAreaElement
+      )
+    ) {
       continue;
     }
 
@@ -333,24 +349,20 @@ const fillKnownTextFields = ({
       continue;
     }
 
-    if (/salary|pay|compensation|notice period/.test(context)) {
-      setFieldValue(
-        control,
-        /notice period/.test(context) ? '2' : preferredSalary,
-      );
-      continue;
-    }
-
-    const inferred = inferYearsAnswer(context);
-    if (inferred && /^(number|text|tel|search|url|email)?$/i.test(control.type || 'text')) {
-      setFieldValue(control, inferred);
+    const inferred = resolveMcfTextAnswer(context, preference);
+    if (
+      inferred.outcome === 'answer' &&
+      /^(number|text|tel|search|url|email)?$/i.test(control.type || 'text')
+    ) {
+      setFieldValue(control, inferred.value);
     }
   }
 };
 
 const getRadioGroups = () => {
   const radios = getFormControls().filter(
-    (element): element is HTMLInputElement => element instanceof HTMLInputElement && element.type === 'radio',
+    (element): element is HTMLInputElement =>
+      element instanceof HTMLInputElement && element.type === 'radio',
   );
   const groups = new Map<string, HTMLInputElement[]>();
 
@@ -359,7 +371,9 @@ const getRadioGroups = () => {
       firstNonEmpty(
         radio.name,
         textOf(radio.closest('fieldset')?.querySelector('legend')),
-        textOf(radio.closest('[data-testid], [class*="question"], [class*="field"]')),
+        textOf(
+          radio.closest('[data-testid], [class*="question"], [class*="field"]'),
+        ),
         radio.id,
       ) || `radio-group-${groups.size}`;
 
@@ -375,14 +389,13 @@ const getRadioLabelText = (radio: HTMLInputElement) =>
   normalizeToken(
     firstNonEmpty(
       textOf(radio.closest('label')),
-      radio.id ? textOf(document.querySelector(`label[for="${CSS.escape(radio.id)}"]`)) : '',
+      radio.id
+        ? textOf(document.querySelector(`label[for="${CSS.escape(radio.id)}"]`))
+        : '',
       radio.getAttribute('aria-label'),
       radio.value,
     ),
   );
-
-const choiceTokens = (value?: 'yes' | 'no' | 'unknown') =>
-  value === 'yes' || value === 'no' ? [value] : [];
 
 const chooseRadioCandidate = (
   radios: HTMLInputElement[],
@@ -391,33 +404,24 @@ const chooseRadioCandidate = (
   const questionText = normalizeToken(
     firstNonEmpty(
       textOf(radios[0]?.closest('fieldset')),
-      textOf(radios[0]?.closest('[data-testid], [class*="question"], [class*="field"]')),
+      textOf(
+        radios[0]?.closest(
+          '[data-testid], [class*="question"], [class*="field"]',
+        ),
+      ),
       radios[0]?.name,
     ),
   );
+  const answer = resolveChoiceQuestionAnswer({
+    questionText,
+    choiceLabels: radios.map(getRadioLabelText),
+    preference,
+    salaryFallbackPeriod: 'annual',
+  });
 
-  const preferredTokens = /sponsor|sponsorship|visa/.test(questionText)
-    ? choiceTokens(preference?.requiresVisaSponsorship)
-    : /work authorization|work authorisation|authorized to work|authorised to work/.test(questionText)
-      ? choiceTokens(preference?.workAuthorization)
-      : /relocat|willing to move/.test(questionText)
-        ? choiceTokens(preference?.willingToRelocate)
-        : /comfortable|onsite|on-site|willing|degree|education|completed/.test(questionText)
-          ? ['yes', 'no']
-          : ['yes', 'no'];
-
-  if (preferredTokens.length === 0) {
-    return null;
-  }
-
-  for (const token of preferredTokens) {
-    const candidate = radios.find((radio) => new RegExp(`\\b${token}\\b`).test(getRadioLabelText(radio)));
-    if (candidate) {
-      return candidate;
-    }
-  }
-
-  return radios[0] ?? null;
+  return answer.outcome === 'answer'
+    ? (radios[answer.optionIndex] ?? null)
+    : null;
 };
 
 const answerQuestions = ({
@@ -430,9 +434,24 @@ const answerQuestions = ({
   const controls = getFormControls();
 
   controls.forEach((element) => {
-    if (element instanceof HTMLSelectElement && isRequiredControl(element) && !element.value) {
-      element.selectedIndex = element.options.length > 1 ? 1 : 0;
-      element.dispatchEvent(new Event('change', { bubbles: true }));
+    if (
+      element instanceof HTMLSelectElement &&
+      isRequiredControl(element) &&
+      !element.value
+    ) {
+      const answer = resolveChoiceQuestionAnswer({
+        questionText: getFieldContextText(element),
+        choiceLabels: Array.from(element.options).map((option) =>
+          firstNonEmpty(option.label, option.text, option.value),
+        ),
+        preference,
+        salaryFallbackPeriod: 'annual',
+      });
+
+      if (answer.outcome === 'answer' && element.options[answer.optionIndex]) {
+        element.selectedIndex = answer.optionIndex;
+        element.dispatchEvent(new Event('change', { bubbles: true }));
+      }
     }
   });
 
@@ -446,7 +465,12 @@ const answerQuestions = ({
   });
 
   controls.forEach((element) => {
-    if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement)) {
+    if (
+      !(
+        element instanceof HTMLInputElement ||
+        element instanceof HTMLTextAreaElement
+      )
+    ) {
       return;
     }
 
@@ -454,27 +478,38 @@ const answerQuestions = ({
       return;
     }
 
-    const inferred = inferYearsAnswer(getFieldContextText(element), preference, profile);
-    if (inferred) {
-      setFieldValue(element, inferred);
+    const inferred = resolveMcfTextAnswer(
+      getFieldContextText(element),
+      preference,
+    );
+    if (inferred.outcome === 'answer') {
+      setFieldValue(element, inferred.value);
     }
   });
 
   const unresolvedRequiredRadioGroups = getRadioGroups().filter(
-    (radios) => radios.some((radio) => isRequiredControl(radio)) && !radios.some((radio) => radio.checked),
+    (radios) =>
+      radios.some((radio) => isRequiredControl(radio)) &&
+      !radios.some((radio) => radio.checked),
   );
 
-  return unresolvedRequiredRadioGroups.length === 0 && controls.every((element) => {
-    if (!isRequiredControl(element)) {
-      return true;
-    }
+  return (
+    unresolvedRequiredRadioGroups.length === 0 &&
+    controls.every((element) => {
+      if (!isRequiredControl(element)) {
+        return true;
+      }
 
-    if (element instanceof HTMLInputElement && ['radio', 'checkbox', 'file'].includes(element.type)) {
-      return true;
-    }
+      if (
+        element instanceof HTMLInputElement &&
+        ['radio', 'checkbox', 'file'].includes(element.type)
+      ) {
+        return true;
+      }
 
-    return element.value.trim().length > 0;
-  });
+      return element.value.trim().length > 0;
+    })
+  );
 };
 
 const fillCurrentStep = ({
@@ -516,16 +551,20 @@ const uploadResumeIfNeeded = async ({
   const hasExistingResumeSelected =
     /select an existing resume/.test(containerText) &&
     (/\.pdf|\.docx?|uploaded|last used/.test(containerText) ||
-      /next, review application|review application|next/.test(visibleActionLabels));
-  const hasDuplicateResumeWarning = /file with the same name already exists|rename or upload a different file/.test(
-    containerText,
-  );
+      /next, review application|review application|next/.test(
+        visibleActionLabels,
+      ));
+  const hasDuplicateResumeWarning =
+    /file with the same name already exists|rename or upload a different file/.test(
+      containerText,
+    );
 
   if (hasExistingResumeSelected || hasDuplicateResumeWarning) {
     return;
   }
 
-  const fileInput = document.querySelector<HTMLInputElement>('input[type="file"]');
+  const fileInput =
+    document.querySelector<HTMLInputElement>('input[type="file"]');
   if (!fileInput || fileInput.files?.length) {
     return;
   }
@@ -542,8 +581,12 @@ const uploadResumeIfNeeded = async ({
   await sleep(800);
 };
 
-const getVisibleActionButtons = (container: ParentNode = getApplicationContainer() ?? document.body) =>
-  Array.from(container.querySelectorAll<HTMLElement>('button, a, [role="button"]'))
+const getVisibleActionButtons = (
+  container: ParentNode = getApplicationContainer() ?? document.body,
+) =>
+  Array.from(
+    container.querySelectorAll<HTMLElement>('button, a, [role="button"]'),
+  )
     .filter((button) => isVisible(button) && !isDisabled(button))
     .filter((button) => !isNavigationLikeContainer(button));
 
@@ -553,10 +596,14 @@ const getResumeSelectionCandidate = ({
   resumeFileName: string | null;
 }) => {
   const container = getApplicationContainer() ?? document.body;
-  const baseName = normalizeToken((resumeFileName ?? '').replace(/\.[a-z0-9]+$/i, ''));
+  const baseName = normalizeToken(
+    (resumeFileName ?? '').replace(/\.[a-z0-9]+$/i, ''),
+  );
 
   const candidates = Array.from(
-    container.querySelectorAll<HTMLElement>('label, button, [role="button"], li, div, article'),
+    container.querySelectorAll<HTMLElement>(
+      'label, button, [role="button"], li, div, article',
+    ),
   )
     .filter((element) => isVisible(element))
     .filter((element) => !isNavigationLikeContainer(element))
@@ -579,7 +626,9 @@ const getResumeSelectionCandidate = ({
         area: rect.width * rect.height,
       };
     })
-    .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate))
+    .filter((candidate): candidate is NonNullable<typeof candidate> =>
+      Boolean(candidate),
+    )
     .sort((left, right) => right.area - left.area);
 
   return candidates[0]?.element ?? null;
@@ -619,10 +668,7 @@ const ensureExistingResumeSelected = async ({
 const getExternalJobIdFromUrl = (value: string) => {
   try {
     const url = new URL(value, window.location.origin);
-    const pathPart = url.pathname
-      .split('/')
-      .filter(Boolean)
-      .slice(-1)[0];
+    const pathPart = url.pathname.split('/').filter(Boolean).slice(-1)[0];
 
     return firstNonEmpty(
       url.searchParams.get('jobId'),
@@ -698,20 +744,32 @@ const extractJobsFromSearchResults = (targetCount: number) => {
     })
     .filter((job): job is NonNullable<typeof job> => Boolean(job));
 
-  const deduped = Array.from(new Map(cards.map((job) => [job.url, job])).values());
+  const deduped = Array.from(
+    new Map(cards.map((job) => [job.url, job])).values(),
+  );
   return deduped.slice(0, Math.max(targetCount, 1));
 };
 
 const getVisibleHeadings = () =>
-  Array.from(document.querySelectorAll<HTMLElement>('h1, h2, h3')).filter((heading) => {
-    const label = normalizeToken(textOf(heading));
-    return isVisible(heading) && label.length > 3 && !/mycareersfuture|search|jobs/.test(label);
-  });
+  Array.from(document.querySelectorAll<HTMLElement>('h1, h2, h3')).filter(
+    (heading) => {
+      const label = normalizeToken(textOf(heading));
+      return (
+        isVisible(heading) &&
+        label.length > 3 &&
+        !/mycareersfuture|search|jobs/.test(label)
+      );
+    },
+  );
 
 const extractCurrentJob = () => {
   const headings = getVisibleHeadings();
   const titleHeading = headings[0] ?? null;
-  const title = firstNonEmpty(textOf(titleHeading), document.title.replace(' | MyCareersFuture Singapore', ''), 'Untitled role');
+  const title = firstNonEmpty(
+    textOf(titleHeading),
+    document.title.replace(' | MyCareersFuture Singapore', ''),
+    'Untitled role',
+  );
   const company = firstNonEmpty(
     textOf(document.querySelector('a[href*="/companies/"]')),
     textOf(titleHeading?.parentElement?.querySelector('a, span, div')),
@@ -719,8 +777,10 @@ const extractCurrentJob = () => {
   );
   const location = firstNonEmpty(
     textOf(
-      Array.from(document.querySelectorAll<HTMLElement>('span, div, p')).find((node) =>
-        isVisible(node) && /singapore|remote|hybrid|on-site|onsite/i.test(textOf(node)),
+      Array.from(document.querySelectorAll<HTMLElement>('span, div, p')).find(
+        (node) =>
+          isVisible(node) &&
+          /singapore|remote|hybrid|on-site|onsite/i.test(textOf(node)),
       ),
     ),
     '',
@@ -747,7 +807,8 @@ const extractCurrentJob = () => {
   };
 };
 
-const fetchBootstrap = () => fetchJson<BootstrapPayload>('/api/dashboard/summary');
+const fetchBootstrap = () =>
+  fetchJson<BootstrapPayload>('/api/dashboard/summary');
 
 const startServerRun = async ({
   jobs,
@@ -769,7 +830,11 @@ const startServerRun = async ({
   });
 
 const getPageFingerprint = () =>
-  [window.location.href, textOf(document.querySelector('h1')), textOf(document.querySelector('[role="dialog"]'))].join('::');
+  [
+    window.location.href,
+    textOf(document.querySelector('h1')),
+    textOf(document.querySelector('[role="dialog"]')),
+  ].join('::');
 
 const getFlowFingerprint = () => {
   const container = getApplicationContainer() ?? document.body;
@@ -777,10 +842,13 @@ const getFlowFingerprint = () => {
     textOf(container.querySelector('h1')),
     textOf(container.querySelector('h2')),
   );
-  const progress = Array.from(container.querySelectorAll('span, div'))
-    .map((node) => textOf(node))
-    .find((value) => /\d+\s*%/.test(value)) ?? '';
-  const buttons = Array.from(container.querySelectorAll<HTMLElement>('button, a, [role="button"]'))
+  const progress =
+    Array.from(container.querySelectorAll('span, div'))
+      .map((node) => textOf(node))
+      .find((value) => /\d+\s*%/.test(value)) ?? '';
+  const buttons = Array.from(
+    container.querySelectorAll<HTMLElement>('button, a, [role="button"]'),
+  )
     .filter((button) => isVisible(button))
     .map((button) => elementLabel(button))
     .join('|');
@@ -788,7 +856,10 @@ const getFlowFingerprint = () => {
   return `${window.location.href}::${title}::${progress}::${buttons}`;
 };
 
-const waitForFlowChange = async (previousFingerprint: string, timeoutMs = 3500) => {
+const waitForFlowChange = async (
+  previousFingerprint: string,
+  timeoutMs = 3500,
+) => {
   const startedAt = Date.now();
 
   while (Date.now() - startedAt < timeoutMs) {
@@ -803,7 +874,9 @@ const waitForFlowChange = async (previousFingerprint: string, timeoutMs = 3500) 
 };
 
 const isJobDetailApplyLabel = (label: string) =>
-  /^(apply|apply now|register interest|apply on company site)$/.test(normalizeToken(label));
+  /^(apply|apply now|register interest|apply on company site)$/.test(
+    normalizeToken(label),
+  );
 
 const isNavigationLikeContainer = (element: HTMLElement) =>
   Boolean(
@@ -830,7 +903,9 @@ const getApplyEntryButton = () => {
   ].filter((scope): scope is HTMLElement => scope instanceof HTMLElement);
 
   for (const scope of scopes) {
-    const candidates = Array.from(scope.querySelectorAll<HTMLElement>('button, a, [role="button"]'))
+    const candidates = Array.from(
+      scope.querySelectorAll<HTMLElement>('button, a, [role="button"]'),
+    )
       .filter((button) => isVisible(button) && !isDisabled(button))
       .filter((button) => !isNavigationLikeContainer(button))
       .filter((button) => isJobDetailApplyLabel(elementLabel(button)))
@@ -867,7 +942,9 @@ const isAlreadyInApplicationFlow = () => {
     return true;
   }
 
-  return Array.from(container.querySelectorAll<HTMLElement>('button, a, [role="button"]'))
+  return Array.from(
+    container.querySelectorAll<HTMLElement>('button, a, [role="button"]'),
+  )
     .filter((button) => isVisible(button))
     .some((button) =>
       /next, review application|review application|submit|change|upload resume|next/i.test(
@@ -906,7 +983,11 @@ const ensureApplicationStarted = async () => {
 
   for (let attempt = 0; attempt < 12; attempt += 1) {
     await sleep(400);
-    if (getVisibleDialogs().length > 0 || getFormControls().length > 0 || getPageFingerprint() !== previousFingerprint) {
+    if (
+      getVisibleDialogs().length > 0 ||
+      getFormControls().length > 0 ||
+      getPageFingerprint() !== previousFingerprint
+    ) {
       return true;
     }
   }
@@ -931,7 +1012,9 @@ const rankActionButtons = (buttons: HTMLElement[], patterns: RegExp[]) =>
         rect,
       };
     })
-    .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate))
+    .filter((candidate): candidate is NonNullable<typeof candidate> =>
+      Boolean(candidate),
+    )
     .sort((left, right) => {
       if (left.patternIndex !== right.patternIndex) {
         return left.patternIndex - right.patternIndex;
@@ -996,12 +1079,18 @@ const waitForPrimaryFlowAction = async ({
   return null;
 };
 
-const hasSuccessState = () => detectMcfFlowStage(getApplicationContainer() ?? document.body) === 'success';
+const hasSuccessState = () =>
+  detectMcfFlowStage(getApplicationContainer() ?? document.body) === 'success';
 
 const dismissSuccessState = async () => {
   const container = getApplicationContainer() ?? document.body;
-  const button = Array.from(container.querySelectorAll<HTMLElement>('button, a, [role="button"]'))
-    .find((candidate) => isVisible(candidate) && /done|finish|close|完成|关闭/.test(elementLabel(candidate)));
+  const button = Array.from(
+    container.querySelectorAll<HTMLElement>('button, a, [role="button"]'),
+  ).find(
+    (candidate) =>
+      isVisible(candidate) &&
+      /done|finish|close|完成|关闭/.test(elementLabel(candidate)),
+  );
 
   if (button) {
     triggerElementClick(button);
@@ -1009,14 +1098,22 @@ const dismissSuccessState = async () => {
   }
 };
 
-const postStatus = async (apiBaseUrl: string, attemptId: string, status: string) => {
+const postStatus = async (
+  apiBaseUrl: string,
+  attemptId: string,
+  status: string,
+) => {
   await fetchJson(`/api/applications/${attemptId}/status`, {
     method: 'PATCH',
     body: { status },
   });
 };
 
-const postReview = async (apiBaseUrl: string, attemptId: string, reason: string) => {
+const postReview = async (
+  apiBaseUrl: string,
+  attemptId: string,
+  reason: string,
+) => {
   await fetchJson(`/api/applications/${attemptId}/review`, {
     method: 'POST',
     body: { reason },
@@ -1116,7 +1213,10 @@ const processPlan = async ({
             : `Advancing ${plan.job.title} on MyCareersFuture`,
     });
 
-    const nextFingerprint = await waitForFlowChange(previousFingerprint, action.kind === 'submit' ? 5000 : 3500);
+    const nextFingerprint = await waitForFlowChange(
+      previousFingerprint,
+      action.kind === 'submit' ? 5000 : 3500,
+    );
     if (nextFingerprint === previousFingerprint && action.kind !== 'submit') {
       fillCurrentStep({
         profile,
@@ -1130,7 +1230,10 @@ const processPlan = async ({
       });
       if (retryAction) {
         triggerElementClick(retryAction.button);
-        await waitForFlowChange(previousFingerprint, retryAction.kind === 'submit' ? 5000 : 3500);
+        await waitForFlowChange(
+          previousFingerprint,
+          retryAction.kind === 'submit' ? 5000 : 3500,
+        );
       }
     }
   }
@@ -1179,15 +1282,19 @@ const executePlansInWorkerTabs = async ({
       recentResult: `Opening ${plan.job.title} on MyCareersFuture`,
     });
 
-    const response = await sendRuntimeMessage<{ ok?: boolean; error?: string }>({
-      type: 'applypilot:run-plan-in-worker-tab',
-      apiBaseUrl,
-      plan,
-      sourceTabId,
-    } satisfies ExtensionMessage);
+    const response = await sendRuntimeMessage<{ ok?: boolean; error?: string }>(
+      {
+        type: 'applypilot:run-plan-in-worker-tab',
+        apiBaseUrl,
+        plan,
+        sourceTabId,
+      } satisfies ExtensionMessage,
+    );
 
     if (!response?.ok) {
-      throw new Error(response?.error ?? `ApplyPilot could not open ${plan.job.title}.`);
+      throw new Error(
+        response?.error ?? `ApplyPilot could not open ${plan.job.title}.`,
+      );
     }
   }
 };
@@ -1249,7 +1356,9 @@ const maybeResumePendingWorkerPlan = async () => {
     } satisfies ExtensionMessage);
   } catch (error) {
     const messageText =
-      error instanceof Error ? error.message : 'MyCareersFuture worker run failed unexpectedly.';
+      error instanceof Error
+        ? error.message
+        : 'MyCareersFuture worker run failed unexpectedly.';
 
     try {
       await sendRuntimeMessage({
@@ -1283,7 +1392,9 @@ const runOnPage = async ({
 
     const jobs = extractJobsFromSearchResults(targetCount);
     if (jobs.length === 0) {
-      throw new Error('No MyCareersFuture job cards could be extracted from this search page.');
+      throw new Error(
+        'No MyCareersFuture job cards could be extracted from this search page.',
+      );
     }
 
     const { run, plans } = await startServerRun({
@@ -1292,7 +1403,9 @@ const runOnPage = async ({
     });
 
     if (plans.length === 0) {
-      throw new Error('No MyCareersFuture jobs could be queued from this search page.');
+      throw new Error(
+        'No MyCareersFuture jobs could be queued from this search page.',
+      );
     }
 
     await reportState({
@@ -1343,68 +1456,74 @@ const runOnPage = async ({
 if (!contentScriptWindow.__applypilotMyCareersFutureListenerRegistered) {
   contentScriptWindow.__applypilotMyCareersFutureListenerRegistered = true;
 
-  chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendResponse) => {
-    void (async () => {
-      if (message.type === 'applypilot:ping') {
-        sendResponse({ ok: true });
-        return;
-      }
-
-      if (message.type === 'applypilot:start-run-on-page') {
-        try {
-          await runOnPage({
-            apiBaseUrl: message.apiBaseUrl,
-            targetCount: message.targetCount,
-            sourceTabId: message.sourceTabId,
-          });
+  chrome.runtime.onMessage.addListener(
+    (message: ExtensionMessage, _sender, sendResponse) => {
+      void (async () => {
+        if (message.type === 'applypilot:ping') {
           sendResponse({ ok: true });
-        } catch (error) {
-          const messageText =
-            error instanceof Error ? error.message : 'MyCareersFuture run failed unexpectedly.';
+          return;
+        }
+
+        if (message.type === 'applypilot:start-run-on-page') {
+          try {
+            await runOnPage({
+              apiBaseUrl: message.apiBaseUrl,
+              targetCount: message.targetCount,
+              sourceTabId: message.sourceTabId,
+            });
+            sendResponse({ ok: true });
+          } catch (error) {
+            const messageText =
+              error instanceof Error
+                ? error.message
+                : 'MyCareersFuture run failed unexpectedly.';
+            await reportState({
+              activeRunId: null,
+              runStatus: 'failed',
+              recentResult: messageText,
+            });
+            sendResponse({ ok: false, error: messageText });
+          }
+          return;
+        }
+
+        if (message.type === 'applypilot:execute-plan-on-page') {
+          try {
+            await executePlanOnCurrentPage({
+              apiBaseUrl: message.apiBaseUrl,
+              plan: message.plan,
+            });
+            sendResponse({ ok: true });
+          } catch (error) {
+            const messageText =
+              error instanceof Error
+                ? error.message
+                : 'MyCareersFuture execution failed unexpectedly.';
+            await reportState({
+              activeRunId: null,
+              runStatus: 'failed',
+              recentResult: messageText,
+            });
+            sendResponse({ ok: false, error: messageText });
+          }
+          return;
+        }
+
+        if (message.type === 'applypilot:pause-run-on-page') {
+          runState.paused = true;
+          runState.active = false;
           await reportState({
             activeRunId: null,
-            runStatus: 'failed',
-            recentResult: messageText,
-          });
-          sendResponse({ ok: false, error: messageText });
-        }
-        return;
-      }
-
-      if (message.type === 'applypilot:execute-plan-on-page') {
-        try {
-          await executePlanOnCurrentPage({
-            apiBaseUrl: message.apiBaseUrl,
-            plan: message.plan,
+            runStatus: 'paused',
+            recentResult: 'Run paused',
           });
           sendResponse({ ok: true });
-        } catch (error) {
-          const messageText =
-            error instanceof Error ? error.message : 'MyCareersFuture execution failed unexpectedly.';
-          await reportState({
-            activeRunId: null,
-            runStatus: 'failed',
-            recentResult: messageText,
-          });
-          sendResponse({ ok: false, error: messageText });
         }
-        return;
-      }
+      })();
 
-      if (message.type === 'applypilot:pause-run-on-page') {
-        runState.paused = true;
-        runState.active = false;
-        await reportState({
-          activeRunId: null,
-          runStatus: 'paused',
-          recentResult: 'Run paused',
-        });
-        sendResponse({ ok: true });
-      }
-    })();
-
-    return true;
-  });
+      return true;
+    },
+  );
 }
 
 void maybeResumePendingWorkerPlan();

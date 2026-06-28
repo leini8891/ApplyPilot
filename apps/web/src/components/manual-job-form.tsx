@@ -39,7 +39,9 @@ export function ManualJobForm() {
     });
 
     if (!response.ok) {
-      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      const payload = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
       setStatus('');
       setError(payload?.error ?? 'Could not save this job.');
       return;
@@ -65,25 +67,40 @@ export function ManualJobForm() {
       <div className="field-grid">
         <label className="field">
           <span>Source</span>
-          <select onChange={(event) => update('source', event.target.value)} value={formState.source}>
+          <select
+            onChange={(event) => update('source', event.target.value)}
+            value={formState.source}
+          >
             <option value="linkedin">LinkedIn</option>
             <option value="mycareersfuture">MyCareersFuture</option>
+            <option value="greenhouse">Greenhouse</option>
           </select>
         </label>
         <label className="field">
           <span>Location</span>
-          <input onChange={(event) => update('location', event.target.value)} value={formState.location} />
+          <input
+            onChange={(event) => update('location', event.target.value)}
+            value={formState.location}
+          />
         </label>
       </div>
 
       <div className="field-grid">
         <label className="field">
           <span>Job title</span>
-          <input onChange={(event) => update('title', event.target.value)} required value={formState.title} />
+          <input
+            onChange={(event) => update('title', event.target.value)}
+            required
+            value={formState.title}
+          />
         </label>
         <label className="field">
           <span>Company</span>
-          <input onChange={(event) => update('company', event.target.value)} required value={formState.company} />
+          <input
+            onChange={(event) => update('company', event.target.value)}
+            required
+            value={formState.company}
+          />
         </label>
       </div>
 
@@ -101,7 +118,10 @@ export function ManualJobForm() {
       <div className="field-grid">
         <label className="field">
           <span>Salary</span>
-          <input onChange={(event) => update('salaryText', event.target.value)} value={formState.salaryText} />
+          <input
+            onChange={(event) => update('salaryText', event.target.value)}
+            value={formState.salaryText}
+          />
         </label>
         <label className="field">
           <span>Employment type</span>

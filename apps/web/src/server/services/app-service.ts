@@ -764,6 +764,7 @@ export const saveManualJob = async ({
 
   const externalIdFromUrl =
     url.match(/\/jobs\/view\/(\d+)/i)?.[1] ??
+    url.match(/\/jobs\/([A-Za-z0-9-]+)/i)?.[1] ??
     url.match(/job\/([A-Za-z0-9-]+)/i)?.[1] ??
     slugify(nonEmptyString(input.title, 'manual-role'));
 

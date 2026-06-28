@@ -1,6 +1,15 @@
-import type { ExtensionMessage, PopupState, WorkerJobPlan } from '../shared/messages';
+import type {
+  ExtensionMessage,
+  PopupState,
+  WorkerJobPlan,
+} from '../shared/messages';
 import { extensionEnv } from '../shared/env';
-const SUPPORTED_JOB_HOSTS = ['linkedin.com/jobs', 'mycareersfuture.gov.sg'] as const;
+const SUPPORTED_JOB_HOSTS = [
+  'linkedin.com/jobs',
+  'mycareersfuture.gov.sg',
+  'boards.greenhouse.io',
+  'job-boards.greenhouse.io',
+] as const;
 const PENDING_WORKER_RUNS_KEY = 'applypilot-pending-worker-runs';
 
 const defaultState: PopupState = {
@@ -24,10 +33,16 @@ type PendingWorkerRun = {
 
 const getPendingWorkerRuns = async () => {
   const result = await chrome.storage.local.get([PENDING_WORKER_RUNS_KEY]);
-  return (result[PENDING_WORKER_RUNS_KEY] as Record<string, PendingWorkerRun> | undefined) ?? {};
+  return (
+    (result[PENDING_WORKER_RUNS_KEY] as
+      | Record<string, PendingWorkerRun>
+      | undefined) ?? {}
+  );
 };
 
-const savePendingWorkerRuns = async (runs: Record<string, PendingWorkerRun>) => {
+const savePendingWorkerRuns = async (
+  runs: Record<string, PendingWorkerRun>,
+) => {
   await chrome.storage.local.set({
     [PENDING_WORKER_RUNS_KEY]: runs,
   });
@@ -56,7 +71,10 @@ const saveState = async (patch: Partial<PopupState>) => {
   });
 
   await chrome.action.setBadgeText({
-    text: nextState.pendingReviewCount > 0 ? String(nextState.pendingReviewCount) : '',
+    text:
+      nextState.pendingReviewCount > 0
+        ? String(nextState.pendingReviewCount)
+        : '',
   });
   await chrome.action.setBadgeBackgroundColor({
     color: nextState.pendingReviewCount > 0 ? '#aa6a17' : '#1b6b5c',
@@ -76,7 +94,8 @@ const proxyApiRequest = async ({
 }) => {
   const response = await fetch(`${extensionEnv.VITE_API_BASE_URL}${path}`, {
     method,
-    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    headers:
+      body === undefined ? undefined : { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 
@@ -88,7 +107,9 @@ const proxyApiRequest = async ({
     return {
       ok: false,
       error:
-        typeof payload?.error === 'string' ? payload.error : `Request failed: ${response.status}`,
+        typeof payload?.error === 'string'
+          ? payload.error
+          : `Request failed: ${response.status}`,
     };
   }
 
@@ -137,16 +158,20 @@ const startRunOnCurrentPage = async ({
   activeTabId: number;
   targetCount: number;
 }) => {
-  const response = await sendMessageToTab<{ ok?: boolean; error?: string }>(activeTabId, {
-    type: 'applypilot:start-run-on-page',
-    targetCount,
-    apiBaseUrl: extensionEnv.VITE_API_BASE_URL,
-    sourceTabId: activeTabId,
-  } satisfies ExtensionMessage);
+  const response = await sendMessageToTab<{ ok?: boolean; error?: string }>(
+    activeTabId,
+    {
+      type: 'applypilot:start-run-on-page',
+      targetCount,
+      apiBaseUrl: extensionEnv.VITE_API_BASE_URL,
+      sourceTabId: activeTabId,
+    } satisfies ExtensionMessage,
+  );
 
   if (!response?.ok) {
     throw new Error(
-      response?.error ?? 'ApplyPilot did not receive a start confirmation from the page.',
+      response?.error ??
+        'ApplyPilot did not receive a start confirmation from the page.',
     );
   }
 };
@@ -195,6 +220,14 @@ const matchesContentScriptPattern = (url: string, pattern: string) => {
     return url.startsWith('https://www.mycareersfuture.gov.sg/');
   }
 
+  if (pattern === 'https://boards.greenhouse.io/*') {
+    return url.startsWith('https://boards.greenhouse.io/');
+  }
+
+  if (pattern === 'https://job-boards.greenhouse.io/*') {
+    return url.startsWith('https://job-boards.greenhouse.io/');
+  }
+
   return false;
 };
 
@@ -202,10 +235,14 @@ const getContentScriptFilesForUrl = (url: string) =>
   chrome.runtime
     .getManifest()
     .content_scripts?.filter((contentScript) =>
-      (contentScript.matches ?? []).some((pattern) => matchesContentScriptPattern(url, pattern)),
+      (contentScript.matches ?? []).some((pattern) =>
+        matchesContentScriptPattern(url, pattern),
+      ),
     )
     .flatMap((contentScript) => contentScript.js ?? [])
-    .filter((file): file is string => typeof file === 'string' && file.length > 0) ?? [];
+    .filter(
+      (file): file is string => typeof file === 'string' && file.length > 0,
+    ) ?? [];
 
 const ensureContentScriptInjected = async (tabId: number) => {
   const tab = await chrome.tabs.get(tabId);
@@ -223,7 +260,9 @@ const ensureContentScriptInjected = async (tabId: number) => {
 
 const canRetryByInjecting = (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error ?? '');
-  return /receiving end does not exist|could not establish connection/i.test(message);
+  return /receiving end does not exist|could not establish connection/i.test(
+    message,
+  );
 };
 
 const shouldReloadJobSiteTab = (error: unknown) => {
@@ -268,7 +307,10 @@ const sendMessageToTab = async <TResponse>(
     try {
       return (await chrome.tabs.sendMessage(tabId, message)) as TResponse;
     } catch (error) {
-      lastError = error instanceof Error ? error : new Error('Unknown tab messaging error');
+      lastError =
+        error instanceof Error
+          ? error
+          : new Error('Unknown tab messaging error');
       if (!injectionAttempted && canRetryByInjecting(error)) {
         injectionAttempted = true;
 
@@ -277,7 +319,9 @@ const sendMessageToTab = async <TResponse>(
           continue;
         } catch (injectError) {
           lastError =
-            injectError instanceof Error ? injectError : new Error('Could not inject ApplyPilot into this tab.');
+            injectError instanceof Error
+              ? injectError
+              : new Error('Could not inject ApplyPilot into this tab.');
         }
       }
 
@@ -285,11 +329,14 @@ const sendMessageToTab = async <TResponse>(
     }
   }
 
-  throw lastError ?? new Error('ApplyPilot could not attach to this job site page.');
+  throw (
+    lastError ?? new Error('ApplyPilot could not attach to this job site page.')
+  );
 };
 
 const buildWorkerJobUrl = (plan: WorkerJobPlan, sourceTabUrl?: string) => {
-  return plan.job.url?.startsWith('https://www.linkedin.com/jobs/')
+  return plan.job.url?.startsWith('http://') ||
+    plan.job.url?.startsWith('https://')
     ? plan.job.url
     : sourceTabUrl && sourceTabUrl.includes('mycareersfuture.gov.sg')
       ? plan.job.url
@@ -318,7 +365,8 @@ const runPlanInWorkerTab = async ({
     url: buildWorkerJobUrl(plan, sourceTab.url),
     active: true,
     windowId: sourceTab.windowId,
-    index: typeof sourceTab.index === 'number' ? sourceTab.index + 1 : undefined,
+    index:
+      typeof sourceTab.index === 'number' ? sourceTab.index + 1 : undefined,
   });
 
   if (!workerTab?.id) {
@@ -389,209 +437,249 @@ chrome.runtime.onInstalled.addListener(async () => {
   });
 });
 
-chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendResponse) => {
-  void (async () => {
-    try {
-      if (message.type === 'applypilot:get-state') {
-        sendResponse(await getState());
-        return;
-      }
-
-      if (message.type === 'applypilot:ping') {
-        sendResponse({ ok: true });
-        return;
-      }
-
-      if (message.type === 'applypilot:api-request') {
-        sendResponse(
-          await proxyApiRequest({
-            path: message.path,
-            method: message.method,
-            body: message.body,
-          }),
-        );
-        return;
-      }
-
-      if (message.type === 'applypilot:content-update') {
-        const current = await getState();
-        sendResponse(
-          await saveState({
-            ...message.payload,
-            dailySubmitted:
-              typeof message.payload.dailySubmitted === 'number'
-                ? current.dailySubmitted + message.payload.dailySubmitted
-                : current.dailySubmitted,
-            pendingReviewCount:
-              typeof message.payload.pendingReviewCount === 'number'
-                ? current.pendingReviewCount + message.payload.pendingReviewCount
-                : current.pendingReviewCount,
-          }),
-        );
-        return;
-      }
-
-      if (message.type === 'applypilot:request-screenshot') {
-        const dataUrl = await chrome.tabs.captureVisibleTab(chrome.windows.WINDOW_ID_CURRENT, {
-          format: 'png',
-        });
-        sendResponse({ dataUrl });
-        return;
-      }
-
-      if (message.type === 'applypilot:start-run') {
-        const activeTab = await getActiveSupportedTab();
-        if (!isSupportedJobTab(activeTab)) {
-          sendResponse({ ok: false, error: 'Open a LinkedIn or MyCareersFuture job page first.' });
-          return;
-        }
-        const activeTabId = activeTab?.id;
-
-        if (activeTabId === undefined) {
-          sendResponse({ ok: false, error: 'Could not resolve the active job-site tab.' });
+chrome.runtime.onMessage.addListener(
+  (message: ExtensionMessage, _sender, sendResponse) => {
+    void (async () => {
+      try {
+        if (message.type === 'applypilot:get-state') {
+          sendResponse(await getState());
           return;
         }
 
-        const targetCount = Math.max(1, Math.min(50, Math.round(message.targetCount || 1)));
-
-        await saveState({
-          runStatus: 'running',
-          pendingReviewCount: 0,
-          recentResult:
-            targetCount > 1 ? `Preparing batch run for up to ${targetCount} jobs` : 'Preparing application run',
-        });
-
-        try {
-          await startLocalRunWithRetry({
-            activeTabId,
-            targetCount,
-          });
-        } catch (error) {
-          const messageText =
-            error instanceof Error ? error.message : 'ApplyPilot could not start this run.';
-          await saveState({
-            runStatus: 'failed',
-            recentResult: messageText,
-          });
-          sendResponse({
-            ok: false,
-            error: messageText,
-          });
-          return;
-        }
-
-        sendResponse({ ok: true });
-        return;
-      }
-
-      if (message.type === 'applypilot:run-plan-in-worker-tab') {
-        if (message.sourceTabId === undefined) {
-          sendResponse({ ok: false, error: 'Could not determine the source job-site tab.' });
-          return;
-        }
-
-        try {
-          await runPlanInWorkerTab({
-            apiBaseUrl: message.apiBaseUrl,
-            sourceTabId: message.sourceTabId,
-            plan: message.plan,
-          });
-          sendResponse({ ok: true });
-        } catch (error) {
-          const messageText =
-            error instanceof Error ? error.message : 'ApplyPilot could not run this job in a worker tab.';
-          sendResponse({ ok: false, error: messageText });
-        }
-        return;
-      }
-
-      if (message.type === 'applypilot:get-pending-worker-plan') {
-        const senderTabId = _sender.tab?.id;
-        if (senderTabId === undefined) {
-          sendResponse({ ok: false });
-          return;
-        }
-
-        const runs = await getPendingWorkerRuns();
-        const run = runs[String(senderTabId)];
-        if (!run) {
-          sendResponse({ ok: false });
-          return;
-        }
-
-        sendResponse({
-          ok: true,
-          apiBaseUrl: run.apiBaseUrl,
-          plan: run.plan,
-          sourceTabId: run.sourceTabId,
-        });
-        return;
-      }
-
-      if (message.type === 'applypilot:worker-plan-finished') {
-        const senderTabId = _sender.tab?.id;
-        if (senderTabId === undefined) {
-          sendResponse({ ok: false, error: 'Could not resolve the worker tab.' });
-          return;
-        }
-
-        const completion = pendingWorkerCompletions.get(senderTabId);
-        if (!completion) {
-          sendResponse({ ok: false, error: 'No pending worker run was registered for this tab.' });
-          return;
-        }
-
-        if (message.status === 'completed') {
-          completion.resolve({ ok: true });
+        if (message.type === 'applypilot:ping') {
           sendResponse({ ok: true });
           return;
         }
 
-        completion.reject(new Error(message.error ?? 'ApplyPilot worker run failed.'));
-        sendResponse({ ok: true });
-        return;
-      }
+        if (message.type === 'applypilot:api-request') {
+          sendResponse(
+            await proxyApiRequest({
+              path: message.path,
+              method: message.method,
+              body: message.body,
+            }),
+          );
+          return;
+        }
 
-      if (message.type === 'applypilot:pause-run') {
-        const tabs = await chrome.tabs.query({
-          currentWindow: true,
-          url: ['https://www.linkedin.com/jobs/*', 'https://www.mycareersfuture.gov.sg/*'],
-        });
+        if (message.type === 'applypilot:content-update') {
+          const current = await getState();
+          sendResponse(
+            await saveState({
+              ...message.payload,
+              dailySubmitted:
+                typeof message.payload.dailySubmitted === 'number'
+                  ? current.dailySubmitted + message.payload.dailySubmitted
+                  : current.dailySubmitted,
+              pendingReviewCount:
+                typeof message.payload.pendingReviewCount === 'number'
+                  ? current.pendingReviewCount +
+                    message.payload.pendingReviewCount
+                  : current.pendingReviewCount,
+            }),
+          );
+          return;
+        }
 
-        for (const tab of tabs) {
-          if (!tab.id) {
-            continue;
+        if (message.type === 'applypilot:request-screenshot') {
+          const dataUrl = await chrome.tabs.captureVisibleTab(
+            chrome.windows.WINDOW_ID_CURRENT,
+            {
+              format: 'png',
+            },
+          );
+          sendResponse({ dataUrl });
+          return;
+        }
+
+        if (message.type === 'applypilot:start-run') {
+          const activeTab = await getActiveSupportedTab();
+          if (!isSupportedJobTab(activeTab)) {
+            sendResponse({
+              ok: false,
+              error:
+                'Open a LinkedIn, MyCareersFuture, or Greenhouse job page first.',
+            });
+            return;
+          }
+          const activeTabId = activeTab?.id;
+
+          if (activeTabId === undefined) {
+            sendResponse({
+              ok: false,
+              error: 'Could not resolve the active job-site tab.',
+            });
+            return;
+          }
+
+          const targetCount = Math.max(
+            1,
+            Math.min(50, Math.round(message.targetCount || 1)),
+          );
+
+          await saveState({
+            runStatus: 'running',
+            pendingReviewCount: 0,
+            recentResult:
+              targetCount > 1
+                ? `Preparing batch run for up to ${targetCount} jobs`
+                : 'Preparing application run',
+          });
+
+          try {
+            await startLocalRunWithRetry({
+              activeTabId,
+              targetCount,
+            });
+          } catch (error) {
+            const messageText =
+              error instanceof Error
+                ? error.message
+                : 'ApplyPilot could not start this run.';
+            await saveState({
+              runStatus: 'failed',
+              recentResult: messageText,
+            });
+            sendResponse({
+              ok: false,
+              error: messageText,
+            });
+            return;
+          }
+
+          sendResponse({ ok: true });
+          return;
+        }
+
+        if (message.type === 'applypilot:run-plan-in-worker-tab') {
+          if (message.sourceTabId === undefined) {
+            sendResponse({
+              ok: false,
+              error: 'Could not determine the source job-site tab.',
+            });
+            return;
           }
 
           try {
-            await chrome.tabs.sendMessage(tab.id, {
-              type: 'applypilot:pause-run-on-page',
-            } satisfies ExtensionMessage);
-          } catch {
-            // Ignore missing content script when a run has already ended or the page re-rendered.
+            await runPlanInWorkerTab({
+              apiBaseUrl: message.apiBaseUrl,
+              sourceTabId: message.sourceTabId,
+              plan: message.plan,
+            });
+            sendResponse({ ok: true });
+          } catch (error) {
+            const messageText =
+              error instanceof Error
+                ? error.message
+                : 'ApplyPilot could not run this job in a worker tab.';
+            sendResponse({ ok: false, error: messageText });
           }
+          return;
         }
 
-        sendResponse(
-          await saveState({
-            runStatus: 'paused',
-            recentResult: 'Run paused from popup',
-          }),
-        );
-        return;
-      }
+        if (message.type === 'applypilot:get-pending-worker-plan') {
+          const senderTabId = _sender.tab?.id;
+          if (senderTabId === undefined) {
+            sendResponse({ ok: false });
+            return;
+          }
 
-      sendResponse({ ok: false, error: 'Unsupported ApplyPilot message.' });
-    } catch (error) {
-      const messageText =
-        error instanceof Error ? error.message : 'ApplyPilot background handling failed unexpectedly.';
-      try {
-        sendResponse({ ok: false, error: messageText });
-      } catch {
-        // Ignore send failures after the channel has already closed.
-      }
-    }
-  })();
+          const runs = await getPendingWorkerRuns();
+          const run = runs[String(senderTabId)];
+          if (!run) {
+            sendResponse({ ok: false });
+            return;
+          }
 
-  return true;
-});
+          sendResponse({
+            ok: true,
+            apiBaseUrl: run.apiBaseUrl,
+            plan: run.plan,
+            sourceTabId: run.sourceTabId,
+          });
+          return;
+        }
+
+        if (message.type === 'applypilot:worker-plan-finished') {
+          const senderTabId = _sender.tab?.id;
+          if (senderTabId === undefined) {
+            sendResponse({
+              ok: false,
+              error: 'Could not resolve the worker tab.',
+            });
+            return;
+          }
+
+          const completion = pendingWorkerCompletions.get(senderTabId);
+          if (!completion) {
+            sendResponse({
+              ok: false,
+              error: 'No pending worker run was registered for this tab.',
+            });
+            return;
+          }
+
+          if (message.status === 'completed') {
+            completion.resolve({ ok: true });
+            sendResponse({ ok: true });
+            return;
+          }
+
+          completion.reject(
+            new Error(message.error ?? 'ApplyPilot worker run failed.'),
+          );
+          sendResponse({ ok: true });
+          return;
+        }
+
+        if (message.type === 'applypilot:pause-run') {
+          const tabs = await chrome.tabs.query({
+            currentWindow: true,
+            url: [
+              'https://www.linkedin.com/jobs/*',
+              'https://www.mycareersfuture.gov.sg/*',
+              'https://boards.greenhouse.io/*',
+              'https://job-boards.greenhouse.io/*',
+            ],
+          });
+
+          for (const tab of tabs) {
+            if (!tab.id) {
+              continue;
+            }
+
+            try {
+              await chrome.tabs.sendMessage(tab.id, {
+                type: 'applypilot:pause-run-on-page',
+              } satisfies ExtensionMessage);
+            } catch {
+              // Ignore missing content script when a run has already ended or the page re-rendered.
+            }
+          }
+
+          sendResponse(
+            await saveState({
+              runStatus: 'paused',
+              recentResult: 'Run paused from popup',
+            }),
+          );
+          return;
+        }
+
+        sendResponse({ ok: false, error: 'Unsupported ApplyPilot message.' });
+      } catch (error) {
+        const messageText =
+          error instanceof Error
+            ? error.message
+            : 'ApplyPilot background handling failed unexpectedly.';
+        try {
+          sendResponse({ ok: false, error: messageText });
+        } catch {
+          // Ignore send failures after the channel has already closed.
+        }
+      }
+    })();
+
+    return true;
+  },
+);

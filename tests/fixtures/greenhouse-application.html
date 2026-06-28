@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta property="og:site_name" content="Demo Marketplace Co" />
+    <title>Senior Product Manager | Demo Marketplace Co</title>
+  </head>
+  <body>
+    <main id="content">
+      <h1>Senior Product Manager</h1>
+      <div class="location">Singapore</div>
+      <section class="job__description">
+        Build buyer and seller workflows for a demo marketplace platform.
+      </section>
+
+      <form
+        id="application-form"
+        action="/demo/jobs/123456/applications"
+        method="post"
+      >
+        <div class="field required">
+          <label for="first_name">First Name *</label>
+          <input
+            id="first_name"
+            name="job_application[first_name]"
+            required
+            type="text"
+          />
+        </div>
+
+        <div class="field required">
+          <label for="last_name">Last Name *</label>
+          <input
+            id="last_name"
+            name="job_application[last_name]"
+            required
+            type="text"
+          />
+        </div>
+
+        <div class="field required">
+          <label for="email">Email *</label>
+          <input
+            id="email"
+            name="job_application[email]"
+            required
+            type="email"
+          />
+        </div>
+
+        <div class="field required">
+          <label for="phone">Phone *</label>
+          <input id="phone" name="job_application[phone]" required type="tel" />
+        </div>
+
+        <fieldset class="field required">
+          <legend>Are you legally authorized to work in Singapore? *</legend>
+          <label
+            ><input
+              name="work_authorization"
+              required
+              type="radio"
+              value="Yes"
+            />
+            Yes</label
+          >
+          <label
+            ><input
+              name="work_authorization"
+              required
+              type="radio"
+              value="No"
+            />
+            No</label
+          >
+        </fieldset>
+
+        <fieldset class="field required">
+          <legend>
+            Will you now or in the future require visa sponsorship? *
+          </legend>
+          <label
+            ><input name="visa_sponsorship" required type="radio" value="Yes" />
+            Yes</label
+          >
+          <label
+            ><input name="visa_sponsorship" required type="radio" value="No" />
+            No</label
+          >
+        </fieldset>
+
+        <div class="field required">
+          <label for="relocation"
+            >Are you open to relocation for this role? *</label
+          >
+          <select id="relocation" name="relocation" required>
+            <option value="">Select one</option>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+        </div>
+
+        <div class="field required">
+          <label for="years"
+            >How many years of product management experience do you have?
+            *</label
+          >
+          <select id="years" name="years" required>
+            <option value="">Please select</option>
+            <option value="0-2">0-2 years</option>
+            <option value="3-5">3-5 years</option>
+            <option value="6-8">6-8 years</option>
+            <option value="9+">9+ years</option>
+          </select>
+        </div>
+
+        <div class="field required">
+          <label for="notice">Current notice period in weeks *</label>
+          <input id="notice" name="notice_period" required type="number" />
+        </div>
+
+        <div class="field required">
+          <label for="salary">Expected annual compensation *</label>
+          <input id="salary" name="salary_expectation" required type="text" />
+        </div>
+
+        <div class="field">
+          <label for="current_salary">What is your current salary?</label>
+          <input id="current_salary" name="current_salary" type="text" />
+        </div>
+
+        <button id="submit_app" type="submit">Submit Application</button>
+      </form>
+    </main>
+  </body>
+</html>
