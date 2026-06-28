@@ -1,6 +1,7 @@
 import { SectionCard } from '@applypilot/ui';
 
 import { InterviewForm } from '@/components/interview-form';
+import { MockInterviewPanel } from '@/components/mock-interview-panel';
 import { formatDateTime } from '@/lib/utils';
 import { requirePageAuth } from '@/server/auth';
 import { getDashboardData, withAppStore } from '@/server/services/app-service';
@@ -16,30 +17,40 @@ export default async function InterviewsPage() {
     }));
 
     return (
-      <div className="two-column-grid">
+      <div className="page-grid">
         <SectionCard
-          description="Capture scheduling, interviewer names, and post-interview reflections."
-          eyebrow="Notes"
-          title="Add interview record"
+          description="Practice against a saved application using role context and reusable knowledge-base material."
+          eyebrow="Practice"
+          title="Mock interview"
         >
-          <InterviewForm applications={applicationOptions} />
+          <MockInterviewPanel applications={applicationOptions} />
         </SectionCard>
 
-        <SectionCard eyebrow="Library" title="Saved interview notes">
-          <div className="simple-list">
-            {snapshot.interviews.map((interview) => (
-              <article className="list-row" key={interview.id}>
-                <div>
-                  <strong>{interview.stage}</strong>
-                  <p>{interview.notes}</p>
-                </div>
-                <span className="muted-copy">
-                  {formatDateTime(interview.scheduledAt)}
-                </span>
-              </article>
-            ))}
-          </div>
-        </SectionCard>
+        <div className="two-column-grid">
+          <SectionCard
+            description="Capture scheduling, interviewer names, and post-interview reflections."
+            eyebrow="Notes"
+            title="Add interview record"
+          >
+            <InterviewForm applications={applicationOptions} />
+          </SectionCard>
+
+          <SectionCard eyebrow="Library" title="Saved interview notes">
+            <div className="simple-list">
+              {snapshot.interviews.map((interview) => (
+                <article className="list-row" key={interview.id}>
+                  <div>
+                    <strong>{interview.stage}</strong>
+                    <p>{interview.notes}</p>
+                  </div>
+                  <span className="muted-copy">
+                    {formatDateTime(interview.scheduledAt)}
+                  </span>
+                </article>
+              ))}
+            </div>
+          </SectionCard>
+        </div>
       </div>
     );
   });
