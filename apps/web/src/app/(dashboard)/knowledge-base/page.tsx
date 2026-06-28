@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { EmptyState, SectionCard, StatCard, StatusPill } from '@applypilot/ui';
 
 import { formatDateTime } from '@/lib/utils';
+import { requirePageAuth } from '@/server/auth';
 import {
   getKnowledgeBaseEntries,
   getKnowledgeBaseTags,
@@ -24,7 +25,8 @@ type KnowledgeBasePageProps = {
 
 type StatusTone = 'neutral' | 'accent' | 'success' | 'warning' | 'danger';
 
-const normalizeParam = (value?: string | string[]) => (Array.isArray(value) ? value[0] : value);
+const normalizeParam = (value?: string | string[]) =>
+  Array.isArray(value) ? value[0] : value;
 
 const matchesTag = (entry: KnowledgeEntry, selectedTag: string) =>
   entry.tags.some((tag) => tag.toLowerCase() === selectedTag.toLowerCase());
@@ -34,13 +36,24 @@ const structureTone = (entry: KnowledgeEntry): StatusTone =>
 
 const previewList = (items: string[]) => items.slice(0, 3);
 
-export default async function KnowledgeBasePage({ searchParams }: KnowledgeBasePageProps) {
+export default async function KnowledgeBasePage({
+  searchParams,
+}: KnowledgeBasePageProps) {
+  await requirePageAuth();
+
   const params = await searchParams;
   const requestedKind = normalizeParam(params?.kind);
-  const selectedKind = isKnowledgeEntryKind(requestedKind) ? requestedKind : null;
+  const selectedKind = isKnowledgeEntryKind(requestedKind)
+    ? requestedKind
+    : null;
   const selectedTag = normalizeParam(params?.tag) ?? null;
-  const [entries, tags] = await Promise.all([getKnowledgeBaseEntries(), getKnowledgeBaseTags()]);
-  const completeEntries = entries.filter((entry) => entry.missingSections.length === 0);
+  const [entries, tags] = await Promise.all([
+    getKnowledgeBaseEntries(),
+    getKnowledgeBaseTags(),
+  ]);
+  const completeEntries = entries.filter(
+    (entry) => entry.missingSections.length === 0,
+  );
   const visibleEntries = entries.filter((entry) => {
     const kindMatch = selectedKind ? entry.kind === selectedKind : true;
     const tagMatch = selectedTag ? matchesTag(entry, selectedTag) : true;
@@ -78,7 +91,11 @@ export default async function KnowledgeBasePage({ searchParams }: KnowledgeBaseP
         <StatCard label="Entries" tone="accent" value={entries.length} />
         <StatCard label="Ready" tone="success" value={completeEntries.length} />
         <StatCard label="Tags" value={tags.length} />
-        <StatCard label="Visible" tone="warning" value={visibleEntries.length} />
+        <StatCard
+          label="Visible"
+          tone="warning"
+          value={visibleEntries.length}
+        />
       </section>
 
       <div className="two-column-grid">
@@ -102,7 +119,11 @@ export default async function KnowledgeBasePage({ searchParams }: KnowledgeBaseP
 
               <label className="field">
                 <span>Title</span>
-                <input name="title" placeholder="Payment reliability story" required />
+                <input
+                  name="title"
+                  placeholder="Payment reliability story"
+                  required
+                />
               </label>
             </div>
 
@@ -143,12 +164,20 @@ export default async function KnowledgeBasePage({ searchParams }: KnowledgeBaseP
             <div className="field-grid">
               <label className="field">
                 <span>Search terms</span>
-                <textarea name="searchTerms" placeholder="payment reliability, merchant trust" rows={3} />
+                <textarea
+                  name="searchTerms"
+                  placeholder="payment reliability, merchant trust"
+                  rows={3}
+                />
               </label>
 
               <label className="field">
                 <span>Resume signals</span>
-                <textarea name="resumeSignals" placeholder="Reduced order-loss risk by about 30%." rows={3} />
+                <textarea
+                  name="resumeSignals"
+                  placeholder="Reduced order-loss risk by about 30%."
+                  rows={3}
+                />
               </label>
             </div>
 
@@ -175,14 +204,22 @@ export default async function KnowledgeBasePage({ searchParams }: KnowledgeBaseP
               <p className="detail-label">Types</p>
               <div className="knowledge-filter-row">
                 <Link
-                  className={!selectedKind ? 'filter-pill filter-pill-active' : 'filter-pill'}
+                  className={
+                    !selectedKind
+                      ? 'filter-pill filter-pill-active'
+                      : 'filter-pill'
+                  }
                   href={createFilterHref({ kind: null })}
                 >
                   All
                 </Link>
                 {knowledgeEntryKinds.map((kind) => (
                   <Link
-                    className={selectedKind === kind ? 'filter-pill filter-pill-active' : 'filter-pill'}
+                    className={
+                      selectedKind === kind
+                        ? 'filter-pill filter-pill-active'
+                        : 'filter-pill'
+                    }
                     href={createFilterHref({ kind })}
                     key={kind}
                   >
@@ -196,7 +233,11 @@ export default async function KnowledgeBasePage({ searchParams }: KnowledgeBaseP
               <p className="detail-label">Tags</p>
               <div className="knowledge-filter-row">
                 <Link
-                  className={!selectedTag ? 'filter-pill filter-pill-active' : 'filter-pill'}
+                  className={
+                    !selectedTag
+                      ? 'filter-pill filter-pill-active'
+                      : 'filter-pill'
+                  }
                   href={createFilterHref({ tag: null })}
                 >
                   All
@@ -221,7 +262,9 @@ export default async function KnowledgeBasePage({ searchParams }: KnowledgeBaseP
               {knowledgeEntryKinds.map((kind) => (
                 <div className="knowledge-count-row" key={kind}>
                   <span>{knowledgeEntryKindLabels[kind]}</span>
-                  <strong>{entries.filter((entry) => entry.kind === kind).length}</strong>
+                  <strong>
+                    {entries.filter((entry) => entry.kind === kind).length}
+                  </strong>
                 </div>
               ))}
             </div>
@@ -232,20 +275,29 @@ export default async function KnowledgeBasePage({ searchParams }: KnowledgeBaseP
       {visibleEntries.length > 0 ? (
         <div className="knowledge-grid">
           {visibleEntries.map((entry) => (
-            <article className="knowledge-card" key={`${entry.kind}-${entry.id}`}>
+            <article
+              className="knowledge-card"
+              key={`${entry.kind}-${entry.id}`}
+            >
               <div className="knowledge-card-header">
                 <div>
                   <p className="panel-eyebrow">{entry.kindLabel}</p>
                   <h3>{entry.title}</h3>
                 </div>
                 <StatusPill
-                  label={entry.missingSections.length === 0 ? 'Ready' : `${entry.missingSections.length} gaps`}
+                  label={
+                    entry.missingSections.length === 0
+                      ? 'Ready'
+                      : `${entry.missingSections.length} gaps`
+                  }
                   tone={structureTone(entry)}
                 />
               </div>
 
               <p className="knowledge-summary">
-                {entry.interviewValue || entry.context || 'No interview value captured yet.'}
+                {entry.interviewValue ||
+                  entry.context ||
+                  'No interview value captured yet.'}
               </p>
 
               <div className="knowledge-card-body">
@@ -283,7 +335,11 @@ export default async function KnowledgeBasePage({ searchParams }: KnowledgeBaseP
               <div className="tag-row">
                 {entry.tags.length > 0 ? (
                   entry.tags.map((tag) => (
-                    <Link className="tag" href={createFilterHref({ tag })} key={tag}>
+                    <Link
+                      className="tag"
+                      href={createFilterHref({ tag })}
+                      key={tag}
+                    >
                       {tag}
                     </Link>
                   ))

@@ -24,17 +24,18 @@ Most job-search tools stop at keyword matching or blind auto-apply. ApplyPilot i
 
 This version moves the center of gravity from browser automation alone to the part that can be reliable every day: local knowledge ingestion, retrieval, scoring, prep assets, application workflow preparation, and tracker sync. The LinkedIn/MyCareersFuture extension remains an assisted apply layer, while the core product now works as a usable job-search cockpit even when no external services are configured.
 
-The product is intentionally single-user and local-first:
+The product is local-first by default, with optional Supabase Auth for real multi-user isolation:
 
 - Public-safe career stories live in `knowledge_base/`.
 - Private interview notes can live in `local_workspace/knowledge_base_private/`, which is ignored by Git.
 - The app works with a gitignored local JSON store by default, so it runs without Supabase or OpenAI.
+- When Supabase env is configured, each signed-in user reads and writes rows as `auth.uid()` through RLS.
 - AI calls have deterministic fallbacks, keeping the workflow usable without external services.
 
 ## Product Tour
 
-| Knowledge base | Daily picks | Application tracker |
-| --- | --- | --- |
+| Knowledge base                                    | Daily picks                                 | Application tracker                                         |
+| ------------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------- |
 | ![Knowledge Base](docs/assets/knowledge-base.png) | ![Daily Picks](docs/assets/daily-picks.png) | ![Application Tracker](docs/assets/application-tracker.png) |
 
 ### Application Workflow
@@ -43,15 +44,15 @@ The product is intentionally single-user and local-first:
 
 ## What It Does
 
-| Capability | What it means |
-| --- | --- |
-| Role matching | Scores saved jobs against profile, preferences, keywords, skills, region, salary, remote policy, and application friction. |
-| Resume and story retrieval | Retrieves resume evidence plus reusable stories, interview notes, job profiles, and answer playbooks for a role. |
-| Local Markdown/JSON knowledge base | Reads structured Markdown, JSON sidecars, standalone JSON entries, and private local-only entries. |
-| Daily Picks | Ranks saved jobs and attaches prep assets under each role so review starts with evidence, not a blank page. |
-| Application workflow | Turns a saved role into a human-reviewable checklist with matched resume evidence, story assets, next actions, and tracker state. |
-| Application tracker sync | Manual job saves create `drafted` tracker records, and repeat saves do not reset existing statuses. |
-| Human-in-the-loop automation | The Chrome extension can assist LinkedIn and MyCareersFuture flows, while risky cases route to review. |
+| Capability                         | What it means                                                                                                                     |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Role matching                      | Scores saved jobs against profile, preferences, keywords, skills, region, salary, remote policy, and application friction.        |
+| Resume and story retrieval         | Retrieves resume evidence plus reusable stories, interview notes, job profiles, and answer playbooks for a role.                  |
+| Local Markdown/JSON knowledge base | Reads structured Markdown, JSON sidecars, standalone JSON entries, and private local-only entries.                                |
+| Daily Picks                        | Ranks saved jobs and attaches prep assets under each role so review starts with evidence, not a blank page.                       |
+| Application workflow               | Turns a saved role into a human-reviewable checklist with matched resume evidence, story assets, next actions, and tracker state. |
+| Application tracker sync           | Manual job saves create `drafted` tracker records, and repeat saves do not reset existing statuses.                               |
+| Human-in-the-loop automation       | The Chrome extension can assist LinkedIn and MyCareersFuture flows, while risky cases route to review.                            |
 
 ## Core Workflow
 
@@ -159,10 +160,43 @@ Open [http://localhost:3000](http://localhost:3000).
 Without Supabase, saved local data is written to `local_workspace/applypilot-store.json`.
 For a database-backed setup, copy `.env.example` to `.env.local`, fill in Supabase/OpenAI values as needed, and apply the SQL migrations under `supabase/migrations/`.
 
+### Supabase Auth mode
+
+Required env:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_publishable_key
+SUPABASE_STORAGE_BUCKET=applypilot-assets
+```
+
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` is still accepted for older projects. `SUPABASE_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY` is optional and reserved for trusted background/admin operations; normal web requests use a request-scoped anon client with the signed-in user's JWT so existing RLS policies run.
+
+In Supabase Auth, enable email/password sign-in and add this local redirect URL:
+
+```text
+http://localhost:3000/auth/callback
+```
+
+Apply migrations in order, for example with the Supabase CLI or SQL editor:
+
+```bash
+supabase db push
+```
+
+`0003_auth_rls_storage_isolation.sql` adds explicit Data API grants, binds user-owned rows to `auth.uid()`, makes the asset bucket private, and limits Storage paths to `resumes/{uid}/...`, `tailored-resumes/{uid}/...`, and `receipts/{uid}/...`.
+
+Local auth smoke test:
+
+1. Start `pnpm dev:web`.
+2. Open `http://localhost:3000/login`, create or sign into account A, save a role or upload a resume.
+3. Sign out, sign into account B, and confirm account A's profile, resumes, saved jobs, applications, and local asset URLs are not visible.
+4. Remove Supabase env values and restart; the app should open in local single-user mode with `local_workspace/applypilot-store.json`.
+
 ## Verification
 
 ```bash
-pnpm test    # 22 tests covering scoring, KB parsing/retrieval, workflow prep, tracker sync, store behavior
+pnpm test    # unit and integration tests for scoring, KB retrieval, auth routing, tracker sync, store behavior
 pnpm build   # production build for all workspace packages
 pnpm lint    # typecheck and lint
 ```

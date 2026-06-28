@@ -18,7 +18,10 @@ export function AppShell({ children }: PropsWithChildren) {
         <div className="brand-card">
           <p className="eyebrow">ApplyPilot</p>
           <h1>Your job search copilot</h1>
-          <p>Recommendation-first job search support, with manual apply kept calm and deliberate.</p>
+          <p>
+            Recommendation-first job search support, with manual apply kept calm
+            and deliberate.
+          </p>
         </div>
 
         <nav className="nav-list">
@@ -33,12 +36,18 @@ export function AppShell({ children }: PropsWithChildren) {
       <main className="content-shell">
         <header className="page-header">
           <div>
-            <p className="eyebrow">Single-user MVP</p>
+            <p className="eyebrow">Private workspace</p>
             <h2>Review the shortlist, keep the process human</h2>
           </div>
           <div className="page-header-note">
-            Daily picks are now the mainline: parse your resume, tune preferences, then review the best roles before applying manually.
+            Daily picks are now the mainline: parse your resume, tune
+            preferences, then review the best roles before applying manually.
           </div>
+          <form action="/auth/signout" method="post">
+            <button className="ghost-link" type="submit">
+              Sign out
+            </button>
+          </form>
         </header>
         {children}
       </main>

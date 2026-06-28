@@ -1,11 +1,8 @@
-import { withRouteError } from '../../_lib';
-
-import { resolveCandidateId } from '../../_lib';
+import { withAuthenticatedRoute } from '../../_lib';
 import { getDashboardData } from '@/server/services/app-service';
 
 export async function GET(request: Request) {
-  return withRouteError(async () => {
-    const candidateId = resolveCandidateId(request);
+  return withAuthenticatedRoute(request, async ({ candidateId }) => {
     const snapshot = await getDashboardData(candidateId);
     return {
       summary: snapshot.summary,

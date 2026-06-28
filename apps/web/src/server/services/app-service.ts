@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 import {
   chooseReviewPriority,
   type ApplicationAttempt,
@@ -17,7 +19,11 @@ import {
 
 import { shortId, slugify } from '@/lib/utils';
 
-import { generateTailoredResumeWithAi, parseCandidateProfileWithAi, scoreJobWithAi } from './ai';
+import {
+  generateTailoredResumeWithAi,
+  parseCandidateProfileWithAi,
+  scoreJobWithAi,
+} from './ai';
 import {
   getKnowledgeBaseEntries,
   matchKnowledgeEntriesForJob,
@@ -25,10 +31,13 @@ import {
 } from './knowledge-base';
 import { renderTailoredResumePdf } from './resume-pdf';
 import { extractResumeText } from './resume';
-import { store } from './store';
+import { store, type AppStore } from './store';
 
-const defaultCandidateId = 'demo-user';
-const syntheticJobIds = new Set(['job_linkedin_1', 'job_linkedin_2', 'linkedin_senior-product-manager-growth']);
+const syntheticJobIds = new Set([
+  'job_linkedin_1',
+  'job_linkedin_2',
+  'linkedin_senior-product-manager-growth',
+]);
 const syntheticJobUrls = new Set([
   'https://www.linkedin.com/jobs/view/12345/',
   'https://www.linkedin.com/jobs/view/56789/',
@@ -43,6 +52,15 @@ const dailyPickHiddenStatuses = new Set<ApplicationAttempt['status']>([
   'rejected',
   'failed',
 ]);
+
+const appStoreContext = new AsyncLocalStorage<AppStore>();
+
+const getStore = () => appStoreContext.getStore() ?? store;
+
+export const withAppStore = async <T>(
+  appStore: AppStore,
+  callback: () => Promise<T>,
+) => appStoreContext.run(appStore, callback);
 
 export type ResumeMaterialMatch = {
   title: string;
@@ -93,10 +111,8 @@ export type ApplicationWorkflow = {
   nextActions: string[];
 };
 
-export const getCandidateId = (explicitCandidateId?: string) => explicitCandidateId ?? defaultCandidateId;
-
-export const getDashboardData = async (candidateId = defaultCandidateId) =>
-  store.getDashboardSnapshot(candidateId);
+export const getDashboardData = async (candidateId: string) =>
+  getStore().getDashboardSnapshot(candidateId);
 
 export const handleResumeUpload = async ({
   candidateId,
@@ -114,15 +130,15 @@ export const handleResumeUpload = async ({
     bytes,
   });
 
-  const asset = await store.storeBinaryAsset({
+  const asset = await getStore().storeBinaryAsset({
     path: `resumes/${candidateId}/${Date.now()}-${slugify(file.name)}`,
     contentType: file.type || 'application/octet-stream',
     bytes,
   });
 
-  await store.ensureCandidateProfile(candidateId);
+  await getStore().ensureCandidateProfile(candidateId);
 
-  return store.saveResume({
+  return getStore().saveResume({
     id: `resume_${shortId()}`,
     candidateId,
     label: label?.trim() || 'Uploaded resume',
@@ -142,7 +158,7 @@ export const parseProfileFromResume = async ({
   candidateId: string;
   resumeId: string;
 }) => {
-  const resumes = await store.listResumes(candidateId);
+  const resumes = await getStore().listResumes(candidateId);
   const resume = resumes.find((item) => item.id === resumeId);
 
   if (!resume) {
@@ -154,8 +170,8 @@ export const parseProfileFromResume = async ({
     resumeText: resume.textContent,
   });
 
-  await store.upsertProfile(profile);
-  await store.saveResume({
+  await getStore().upsertProfile(profile);
+  await getStore().saveResume({
     ...resume,
     parsedProfileId: profile.id,
   });
@@ -170,12 +186,14 @@ export const savePreferences = async ({
   candidateId: string;
   input: unknown;
 }) => {
-  await store.ensureCandidateProfile(candidateId);
+  await getStore().ensureCandidateProfile(candidateId);
 
   const parsedInput =
-    typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {};
+    typeof input === 'object' && input !== null
+      ? (input as Record<string, unknown>)
+      : {};
 
-  return store.upsertPreferences(
+  return getStore().upsertPreferences(
     jobPreferenceSchema.parse({
       candidateId,
       ...parsedInput,
@@ -184,7 +202,9 @@ export const savePreferences = async ({
 };
 
 const nonEmptyString = (value: unknown, fallback: string) =>
-  typeof value === 'string' && value.trim().length > 0 ? value.trim() : fallback;
+  typeof value === 'string' && value.trim().length > 0
+    ? value.trim()
+    : fallback;
 
 const optionalNonEmptyString = (value: unknown) =>
   typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
@@ -192,7 +212,10 @@ const optionalNonEmptyString = (value: unknown) =>
 const buildJobRecord = (input: Partial<JobPosting>) => {
   const normalizedTitle = nonEmptyString(input.title, 'Untitled role');
   const normalizedCompany = nonEmptyString(input.company, 'Unknown company');
-  const normalizedExternalJobId = nonEmptyString(input.externalJobId ?? input.id, shortId());
+  const normalizedExternalJobId = nonEmptyString(
+    input.externalJobId ?? input.id,
+    shortId(),
+  );
 
   return {
     id:
@@ -214,17 +237,33 @@ const buildJobRecord = (input: Partial<JobPosting>) => {
   };
 };
 
+const scopeJobRecordToCandidate = (
+  job: JobPosting,
+  candidateId: string,
+): JobPosting => ({
+  ...job,
+  id: `${job.id}_${slugify(candidateId)}`,
+});
+
 const hasRegionMatch = (job: JobPosting, preference: JobPreference) =>
   preference.regions.length === 0 ||
-  preference.regions.some((region) => job.location.toLowerCase().includes(region.toLowerCase()));
+  preference.regions.some((region) =>
+    job.location.toLowerCase().includes(region.toLowerCase()),
+  );
 
-const getTargetRoles = (profile: CandidateProfile, preference: JobPreference) => [
-  ...preference.targetRoles,
-  ...profile.targetRoles,
-];
+const getTargetRoles = (
+  profile: CandidateProfile,
+  preference: JobPreference,
+) => [...preference.targetRoles, ...profile.targetRoles];
 
-const hasTargetRoleMatch = (job: JobPosting, profile: CandidateProfile, preference: JobPreference) =>
-  getTargetRoles(profile, preference).some((role) => job.title.toLowerCase().includes(role.toLowerCase()));
+const hasTargetRoleMatch = (
+  job: JobPosting,
+  profile: CandidateProfile,
+  preference: JobPreference,
+) =>
+  getTargetRoles(profile, preference).some((role) =>
+    job.title.toLowerCase().includes(role.toLowerCase()),
+  );
 
 const dedupeJobs = (jobs: JobPosting[]) => {
   const seen = new Set<string>();
@@ -272,7 +311,9 @@ const materialTermMatches = (haystack: string, value: string) => {
   const haystackTokens = new Set(haystack.split(' ').filter(Boolean));
   const tokens = normalized.split(' ').filter(Boolean);
 
-  return tokens.length > 0 && tokens.every((token) => haystackTokens.has(token));
+  return (
+    tokens.length > 0 && tokens.every((token) => haystackTokens.has(token))
+  );
 };
 
 const uniqueStrings = (items: string[]) => {
@@ -298,12 +339,17 @@ const buildResumeSearchTerms = (job: JobPosting, score: MatchScore) =>
   uniqueStrings([
     ...score.keywordHits,
     ...job.title.split(/[^a-z0-9+#]+/i).filter((term) => term.length > 2),
-    ...job.description.split(/[^a-z0-9+#]+/i).filter((term) => term.length > 4).slice(0, 20),
+    ...job.description
+      .split(/[^a-z0-9+#]+/i)
+      .filter((term) => term.length > 4)
+      .slice(0, 20),
   ]).slice(0, 32);
 
 const scoreMaterial = (text: string, terms: string[]) => {
   const haystack = normalizeMaterialText(text);
-  const matchedTerms = terms.filter((term) => materialTermMatches(haystack, term));
+  const matchedTerms = terms.filter((term) =>
+    materialTermMatches(haystack, term),
+  );
 
   return {
     matchedTerms,
@@ -333,7 +379,10 @@ export const matchResumeMaterialsForJob = ({
   const terms = buildResumeSearchTerms(job, score);
   const matches: Array<ResumeMaterialMatch & { scoreValue: number }> = [];
   const matchedSkills = profile.skills.filter((skill) =>
-    materialTermMatches(normalizeMaterialText(`${job.title} ${job.description}`), skill),
+    materialTermMatches(
+      normalizeMaterialText(`${job.title} ${job.description}`),
+      skill,
+    ),
   );
 
   if (matchedSkills.length > 0) {
@@ -348,7 +397,9 @@ export const matchResumeMaterialsForJob = ({
   }
 
   profile.workExperiences.forEach((experience) => {
-    const highlights = [experience.summary, ...experience.achievements].filter(Boolean);
+    const highlights = [experience.summary, ...experience.achievements].filter(
+      Boolean,
+    );
     const material = [
       experience.company,
       experience.title,
@@ -361,13 +412,18 @@ export const matchResumeMaterialsForJob = ({
       return;
     }
 
-    const matchedHighlights = highlights.filter((highlight) => scoreMaterial(highlight, terms).score > 0);
+    const matchedHighlights = highlights.filter(
+      (highlight) => scoreMaterial(highlight, terms).score > 0,
+    );
 
     matches.push({
       title: `${experience.title} at ${experience.company}`,
       sourceLabel: 'Resume experience',
       reason: `Matched resume terms: ${scored.matchedTerms.slice(0, 4).join(', ')}`,
-      highlights: (matchedHighlights.length > 0 ? matchedHighlights : highlights).slice(0, 3),
+      highlights: (matchedHighlights.length > 0
+        ? matchedHighlights
+        : highlights
+      ).slice(0, 3),
       tags: scored.matchedTerms.slice(0, 4),
       scoreValue: scored.score + matchedHighlights.length,
     });
@@ -375,7 +431,9 @@ export const matchResumeMaterialsForJob = ({
 
   resumes.forEach((resume) => {
     const snippets = splitResumeSnippets(resume.textContent);
-    const matchedSnippets = snippets.filter((snippet) => scoreMaterial(snippet, terms).score > 0);
+    const matchedSnippets = snippets.filter(
+      (snippet) => scoreMaterial(snippet, terms).score > 0,
+    );
     const scored = scoreMaterial(resume.textContent, terms);
 
     if (matchedSnippets.length === 0 || scored.score === 0) {
@@ -411,7 +469,10 @@ const describeFreshness = (scrapedAt: string) => {
     return 'Added recently';
   }
 
-  const dayDiff = Math.max(0, Math.floor((Date.now() - timestamp) / 86_400_000));
+  const dayDiff = Math.max(
+    0,
+    Math.floor((Date.now() - timestamp) / 86_400_000),
+  );
 
   if (dayDiff === 0) {
     return 'Seen today';
@@ -446,10 +507,13 @@ const buildDailyPick = ({
   const fitSignals = [
     `${score.overall}% match from role, keyword, skill, location, salary, and application-friction signals`,
     ...score.reasons.slice(0, 4),
-    hasTargetRoleMatch(job, profile, preference) && getTargetRoles(profile, preference)[0]
+    hasTargetRoleMatch(job, profile, preference) &&
+    getTargetRoles(profile, preference)[0]
       ? `Title overlaps with target roles like ${getTargetRoles(profile, preference)[0]}`
       : null,
-    hasRegionMatch(job, preference) ? `Location fits your region filters` : null,
+    hasRegionMatch(job, preference)
+      ? `Location fits your region filters`
+      : null,
     job.salaryText ? `Salary listed: ${job.salaryText}` : null,
   ].filter((item): item is string => Boolean(item));
 
@@ -461,7 +525,9 @@ const buildDailyPick = ({
         !hasRegionMatch(job, preference) && preference.regions.length > 0
           ? `Outside preferred regions: ${preference.regions.slice(0, 2).join(', ')}`
           : null,
-        preference.vipCompanies.some((company) => company.toLowerCase() === job.company.toLowerCase())
+        preference.vipCompanies.some(
+          (company) => company.toLowerCase() === job.company.toLowerCase(),
+        )
           ? 'VIP company, worth a deliberate review'
           : null,
         !job.salaryText ? 'Salary not listed' : null,
@@ -473,9 +539,12 @@ const buildDailyPick = ({
     job,
     score,
     applicationId,
-    fitSignals: fitSignals.length > 0 ? fitSignals : ['Profile overlap looks promising'],
+    fitSignals:
+      fitSignals.length > 0 ? fitSignals : ['Profile overlap looks promising'],
     watchouts,
-    sourceLabel: fromSavedPool ? `${job.source} saved pool` : `${job.source} sample pool`,
+    sourceLabel: fromSavedPool
+      ? `${job.source} saved pool`
+      : `${job.source} sample pool`,
     freshnessLabel: describeFreshness(job.scrapedAt),
     resumeMatches,
     knowledgeMatches,
@@ -483,17 +552,18 @@ const buildDailyPick = ({
 };
 
 export const getDailyPicks = async (
-  candidateId = defaultCandidateId,
+  candidateId: string,
   limit = 3,
 ): Promise<DailyPicksSnapshot> => {
-  const [profile, preference, jobs, attempts, resumes, knowledgeEntries] = await Promise.all([
-    store.getProfile(candidateId),
-    store.getPreferences(candidateId),
-    store.listJobs(),
-    store.listAttempts(candidateId),
-    store.listResumes(candidateId),
-    getKnowledgeBaseEntries(),
-  ]);
+  const [profile, preference, jobs, attempts, resumes, knowledgeEntries] =
+    await Promise.all([
+      getStore().getProfile(candidateId),
+      getStore().getPreferences(candidateId),
+      getStore().listJobs(candidateId),
+      getStore().listAttempts(candidateId),
+      getStore().listResumes(candidateId),
+      getKnowledgeBaseEntries(),
+    ]);
 
   if (!profile || !preference) {
     return {
@@ -516,7 +586,9 @@ export const getDailyPicks = async (
   const savedPool = dedupeJobs(
     jobs.filter((job) => !hiddenJobIds.has(job.id) && !isSyntheticJob(job)),
   );
-  const applicationIdByJobId = new Map(attempts.map((attempt) => [attempt.jobPostingId, attempt.id]));
+  const applicationIdByJobId = new Map(
+    attempts.map((attempt) => [attempt.jobPostingId, attempt.id]),
+  );
 
   const combinedPool = savedPool;
 
@@ -589,14 +661,14 @@ const getOrCreateSavedJobsRun = async ({
   source: SourcePlatform;
 }) => {
   const runId = buildSavedJobsRunId(candidateId, source);
-  const runs = await store.listRuns(candidateId);
+  const runs = await getStore().listRuns(candidateId);
   const existingRun = runs.find((run) => run.id === runId);
 
   if (existingRun) {
     return existingRun;
   }
 
-  return store.createRun({
+  return getStore().createRun({
     id: runId,
     candidateId,
     source,
@@ -623,7 +695,7 @@ const syncSavedJobToApplicationTracker = async ({
     candidateId,
     source: job.source,
   });
-  const attempts = await store.listAttempts(candidateId);
+  const attempts = await getStore().listAttempts(candidateId);
   const attemptId = buildSavedJobAttemptId(candidateId, job);
   const existingAttempt = attempts.find(
     (attempt) => attempt.id === attemptId || attempt.jobPostingId === job.id,
@@ -640,7 +712,7 @@ const syncSavedJobToApplicationTracker = async ({
   };
 
   if (existingAttempt) {
-    return store.saveAttempt({
+    return getStore().saveAttempt({
       ...existingAttempt,
       jobPostingId: job.id,
       metadata,
@@ -648,7 +720,7 @@ const syncSavedJobToApplicationTracker = async ({
     });
   }
 
-  return store.saveAttempt({
+  return getStore().saveAttempt({
     id: attemptId,
     runId: run.id,
     jobPostingId: job.id,
@@ -681,7 +753,7 @@ export const saveManualJob = async ({
     easyApply?: unknown;
   };
 }) => {
-  await store.ensureCandidateProfile(candidateId);
+  await getStore().ensureCandidateProfile(candidateId);
 
   const source = sourcePlatformSchema.parse(input.source ?? 'linkedin');
   const url = nonEmptyString(input.url, '');
@@ -695,21 +767,25 @@ export const saveManualJob = async ({
     url.match(/job\/([A-Za-z0-9-]+)/i)?.[1] ??
     slugify(nonEmptyString(input.title, 'manual-role'));
 
-  const job = await store.saveJob(
-    buildJobRecord({
-      source,
-      externalJobId: externalIdFromUrl,
-      title: nonEmptyString(input.title, 'Untitled role'),
-      company: nonEmptyString(input.company, 'Unknown company'),
-      location: nonEmptyString(input.location, ''),
-      salaryText: optionalNonEmptyString(input.salaryText),
-      employmentType: optionalNonEmptyString(input.employmentType),
-      url,
-      description: nonEmptyString(input.description, ''),
-      easyApply: Boolean(input.easyApply),
-      detectedQuestions: [],
-      scrapedAt: new Date().toISOString(),
-    }),
+  const job = await getStore().saveJob(
+    scopeJobRecordToCandidate(
+      buildJobRecord({
+        source,
+        externalJobId: externalIdFromUrl,
+        title: nonEmptyString(input.title, 'Untitled role'),
+        company: nonEmptyString(input.company, 'Unknown company'),
+        location: nonEmptyString(input.location, ''),
+        salaryText: optionalNonEmptyString(input.salaryText),
+        employmentType: optionalNonEmptyString(input.employmentType),
+        url,
+        description: nonEmptyString(input.description, ''),
+        easyApply: Boolean(input.easyApply),
+        detectedQuestions: [],
+        scrapedAt: new Date().toISOString(),
+      }),
+      candidateId,
+    ),
+    candidateId,
   );
 
   await syncSavedJobToApplicationTracker({
@@ -730,22 +806,27 @@ export const scoreJobForCandidate = async ({
   includeTailoredResume?: boolean;
 }) => {
   const [profile, preferences, resumes] = await Promise.all([
-    store.getProfile(candidateId),
-    store.getPreferences(candidateId),
-    store.listResumes(candidateId),
+    getStore().getProfile(candidateId),
+    getStore().getPreferences(candidateId),
+    getStore().listResumes(candidateId),
   ]);
 
   if (!profile || !preferences || resumes.length === 0) {
-    throw new Error('Upload a resume and save job preferences before scoring jobs.');
+    throw new Error(
+      'Upload a resume and save job preferences before scoring jobs.',
+    );
   }
 
-  const job = await store.saveJob(buildJobRecord(jobInput));
+  const job = await getStore().saveJob(
+    scopeJobRecordToCandidate(buildJobRecord(jobInput), candidateId),
+    candidateId,
+  );
   const score = await scoreJobWithAi({
     profile,
     preferences,
     job,
   });
-  await store.saveMatchScore(score);
+  await getStore().saveMatchScore(score);
 
   const reviewReasons = needsReviewRouting({
     job,
@@ -757,7 +838,9 @@ export const scoreJobForCandidate = async ({
   });
 
   const baseResume = resumes[0]!;
-  const resumeUploadUrl = store.getAssetPublicUrl(baseResume.storagePath);
+  const resumeUploadUrl = await getStore().getAssetPublicUrl(
+    baseResume.storagePath,
+  );
   let persistedResume = null;
 
   if (includeTailoredResume) {
@@ -773,13 +856,13 @@ export const scoreJobForCandidate = async ({
       job,
       tailoredResume,
     });
-    const asset = await store.storeBinaryAsset({
+    const asset = await getStore().storeBinaryAsset({
       path: `tailored-resumes/${candidateId}/${tailoredResume.id}.pdf`,
       contentType: 'application/pdf',
       bytes: Buffer.from(pdfBytes),
     });
 
-    persistedResume = await store.saveTailoredResume({
+    persistedResume = await getStore().saveTailoredResume({
       ...tailoredResume,
       pdfStoragePath: asset.storagePath,
       downloadUrl: asset.publicUrl,
@@ -808,16 +891,18 @@ export const startRun = async ({
   jobs?: Partial<JobPosting>[];
 }) => {
   const [profile, preferences, resumes] = await Promise.all([
-    store.getProfile(candidateId),
-    store.getPreferences(candidateId),
-    store.listResumes(candidateId),
+    getStore().getProfile(candidateId),
+    getStore().getPreferences(candidateId),
+    getStore().listResumes(candidateId),
   ]);
 
   if (!profile || !preferences || resumes.length === 0) {
-    throw new Error('Upload a resume and save job preferences before creating a run plan.');
+    throw new Error(
+      'Upload a resume and save job preferences before creating a run plan.',
+    );
   }
 
-  const run = await store.createRun({
+  const run = await getStore().createRun({
     id: `run_${shortId()}`,
     candidateId,
     source,
@@ -829,22 +914,28 @@ export const startRun = async ({
     status: 'running',
     startedAt: new Date().toISOString(),
     completedAt: null,
-    notes: jobs?.length ? `Queued ${jobs.length} jobs` : 'Run started from dashboard',
+    notes: jobs?.length
+      ? `Queued ${jobs.length} jobs`
+      : 'Run started from dashboard',
   });
 
-  const stagedJobs = jobs?.length ? jobs : [
-    {
-      source,
-      title: 'Product Manager, Growth',
-      company: 'Demo Growth Co',
-      location: 'Remote',
-      url: 'https://www.linkedin.com/jobs/view/999/',
-      description:
-        'Own product growth loops, subscription experiments, CRM workflows, and analytics journeys.',
-      easyApply: true,
-      detectedQuestions: ['How many years of B2B SaaS experience do you have?'],
-    },
-  ];
+  const stagedJobs = jobs?.length
+    ? jobs
+    : [
+        {
+          source,
+          title: 'Product Manager, Growth',
+          company: 'Demo Growth Co',
+          location: 'Remote',
+          url: 'https://www.linkedin.com/jobs/view/999/',
+          description:
+            'Own product growth loops, subscription experiments, CRM workflows, and analytics journeys.',
+          easyApply: true,
+          detectedQuestions: [
+            'How many years of B2B SaaS experience do you have?',
+          ],
+        },
+      ];
 
   const attempts: ApplicationAttempt[] = [];
   const plans: Array<{
@@ -857,8 +948,13 @@ export const startRun = async ({
     reviewReasons: string[];
   }> = [];
   for (const jobInput of stagedJobs) {
-    const { job, reviewReasons, tailoredResume, resumeUploadUrl, resumeFileName } =
-      await scoreJobForCandidate({
+    const {
+      job,
+      reviewReasons,
+      tailoredResume,
+      resumeUploadUrl,
+      resumeFileName,
+    } = await scoreJobForCandidate({
       candidateId,
       jobInput,
       includeTailoredResume: false,
@@ -883,7 +979,7 @@ export const startRun = async ({
       updatedAt: new Date().toISOString(),
     };
 
-    await store.saveAttempt(attempt);
+    await getStore().saveAttempt(attempt);
     attempts.push(attempt);
     plans.push({
       attempt,
@@ -896,7 +992,7 @@ export const startRun = async ({
     });
 
     if (reviewReasons.length > 0) {
-      await store.createReviewItem({
+      await getStore().createReviewItem({
         id: `review_${shortId()}`,
         applicationId: attempt.id,
         reason: reviewReasons.join('; '),
@@ -943,7 +1039,8 @@ const buildWorkflowChecklist = ({
   resumeMatches: ResumeMaterialMatch[];
   knowledgeMatches: KnowledgeMatch[];
 }): ApplicationWorkflowChecklistItem[] => {
-  const hasUsefulDescription = job.description.trim().split(/\s+/).filter(Boolean).length >= 8;
+  const hasUsefulDescription =
+    job.description.trim().split(/\s+/).filter(Boolean).length >= 8;
   const hasWatchouts = score.gaps.length > 0;
 
   return [
@@ -985,7 +1082,9 @@ const buildWorkflowChecklist = ({
     {
       id: 'watchouts',
       label: 'Resolve watchouts',
-      detail: hasWatchouts ? score.gaps.slice(0, 3).join('; ') : 'No major watchouts from current filters.',
+      detail: hasWatchouts
+        ? score.gaps.slice(0, 3).join('; ')
+        : 'No major watchouts from current filters.',
       state: hasWatchouts ? 'needs_input' : 'ready',
     },
     {
@@ -1020,15 +1119,24 @@ const buildWorkflowNextActions = ({
   const blockers = checklist.filter((item) => item.state !== 'ready');
 
   if (attempt.status === 'submitted') {
-    return ['Save the receipt or confirmation screenshot.', 'Watch for recruiter response and move to viewed/interview when needed.'];
+    return [
+      'Save the receipt or confirmation screenshot.',
+      'Watch for recruiter response and move to viewed/interview when needed.',
+    ];
   }
 
   if (attempt.status === 'interview') {
-    return ['Open interview notes and prepare role-specific stories.', 'Keep the application card linked to follow-up notes.'];
+    return [
+      'Open interview notes and prepare role-specific stories.',
+      'Keep the application card linked to follow-up notes.',
+    ];
   }
 
   if (attempt.status === 'needs_review') {
-    return ['Resolve the review note before applying.', 'Move the card back to queued once the blocker is clear.'];
+    return [
+      'Resolve the review note before applying.',
+      'Move the card back to queued once the blocker is clear.',
+    ];
   }
 
   if (blockers.length > 0) {
@@ -1051,21 +1159,26 @@ export const getApplicationWorkflow = async ({
   candidateId: string;
   applicationId: string;
 }): Promise<ApplicationWorkflow> => {
-  const detail = await store.getApplicationDetail(candidateId, applicationId);
+  const detail = await getStore().getApplicationDetail(
+    candidateId,
+    applicationId,
+  );
 
   if (!detail || !detail.job) {
     throw new Error('Application not found.');
   }
 
   const [profile, preference, resumes, knowledgeEntries] = await Promise.all([
-    store.getProfile(candidateId),
-    store.getPreferences(candidateId),
-    store.listResumes(candidateId),
+    getStore().getProfile(candidateId),
+    getStore().getPreferences(candidateId),
+    getStore().listResumes(candidateId),
     getKnowledgeBaseEntries(),
   ]);
 
   if (!profile || !preference) {
-    throw new Error('Upload a resume and save job preferences before preparing applications.');
+    throw new Error(
+      'Upload a resume and save job preferences before preparing applications.',
+    );
   }
 
   const score = scoreJobAgainstPreferences(profile, preference, detail.job);
@@ -1113,7 +1226,10 @@ export const prepareApplicationWorkflow = async ({
   candidateId: string;
   applicationId: string;
 }) => {
-  const detail = await store.getApplicationDetail(candidateId, applicationId);
+  const detail = await getStore().getApplicationDetail(
+    candidateId,
+    applicationId,
+  );
 
   if (!detail || !detail.job) {
     throw new Error('Application not found.');
@@ -1124,7 +1240,8 @@ export const prepareApplicationWorkflow = async ({
     applicationId,
   });
   const preparedAt = new Date().toISOString();
-  const nextStatus = detail.attempt.status === 'drafted' ? 'queued' : detail.attempt.status;
+  const nextStatus =
+    detail.attempt.status === 'drafted' ? 'queued' : detail.attempt.status;
   const metadata = {
     ...detail.attempt.metadata,
     company: detail.job.company,
@@ -1143,8 +1260,8 @@ export const prepareApplicationWorkflow = async ({
     },
   };
 
-  await store.saveMatchScore(workflow.score);
-  const application = await store.saveAttempt({
+  await getStore().saveMatchScore(workflow.score);
+  const application = await getStore().saveAttempt({
     ...detail.attempt,
     status: nextStatus,
     metadata,
@@ -1169,19 +1286,22 @@ export const markApplicationForReview = async ({
   applicationId: string;
   reason: string;
 }) => {
-  const detail = await store.getApplicationDetail(candidateId, applicationId);
+  const detail = await getStore().getApplicationDetail(
+    candidateId,
+    applicationId,
+  );
   if (!detail || !detail.job) {
     throw new Error('Application not found.');
   }
 
-  const updatedAttempt = await store.saveAttempt({
+  const updatedAttempt = await getStore().saveAttempt({
     ...detail.attempt,
     status: 'needs_review',
     reviewReason: reason,
     updatedAt: new Date().toISOString(),
   });
 
-  const review = await store.createReviewItem({
+  const review = await getStore().createReviewItem({
     id: `review_${shortId()}`,
     applicationId,
     reason,
@@ -1208,14 +1328,17 @@ export const updateApplicationStatus = async ({
   applicationId: string;
   status: unknown;
 }) => {
-  const detail = await store.getApplicationDetail(candidateId, applicationId);
+  const detail = await getStore().getApplicationDetail(
+    candidateId,
+    applicationId,
+  );
   if (!detail) {
     throw new Error('Application not found.');
   }
 
   const nextStatus = applicationStatusSchema.parse(status);
 
-  return store.saveAttempt({
+  return getStore().saveAttempt({
     ...detail.attempt,
     status: nextStatus,
     submittedAt:
@@ -1235,7 +1358,10 @@ export const attachApplicationReceipt = async ({
   applicationId: string;
   dataUrl: string;
 }) => {
-  const detail = await store.getApplicationDetail(candidateId, applicationId);
+  const detail = await getStore().getApplicationDetail(
+    candidateId,
+    applicationId,
+  );
   if (!detail) {
     throw new Error('Application not found.');
   }
@@ -1246,13 +1372,13 @@ export const attachApplicationReceipt = async ({
   }
 
   const contentType = header.match(/data:(.*?);base64/)?.[1] ?? 'image/png';
-  const asset = await store.storeBinaryAsset({
+  const asset = await getStore().storeBinaryAsset({
     path: `receipts/${candidateId}/${applicationId}.png`,
     contentType,
     bytes: Buffer.from(payload, 'base64'),
   });
 
-  return store.saveAttempt({
+  return getStore().saveAttempt({
     ...detail.attempt,
     receiptPath: asset.storagePath,
     receiptUrl: asset.publicUrl,
@@ -1267,12 +1393,15 @@ export const createInterview = async ({
   candidateId: string;
   input: Omit<InterviewRecord, 'id' | 'createdAt' | 'updatedAt'>;
 }) => {
-  const detail = await store.getApplicationDetail(candidateId, input.applicationId);
+  const detail = await getStore().getApplicationDetail(
+    candidateId,
+    input.applicationId,
+  );
   if (!detail) {
     throw new Error('Application not found for interview note.');
   }
 
-  return store.saveInterview({
+  return getStore().saveInterview({
     ...input,
     id: `interview_${shortId()}`,
     createdAt: new Date().toISOString(),
@@ -1280,11 +1409,15 @@ export const createInterview = async ({
   });
 };
 
-export const getApplicationDetail = async (candidateId: string, applicationId: string) =>
-  store.getApplicationDetail(candidateId, applicationId);
+export const getApplicationDetail = async (
+  candidateId: string,
+  applicationId: string,
+) => getStore().getApplicationDetail(candidateId, applicationId);
 
-export const getProfileOrThrow = async (candidateId: string): Promise<CandidateProfile> => {
-  const profile = await store.getProfile(candidateId);
+export const getProfileOrThrow = async (
+  candidateId: string,
+): Promise<CandidateProfile> => {
+  const profile = await getStore().getProfile(candidateId);
   if (!profile) {
     throw new Error('Candidate profile not found.');
   }

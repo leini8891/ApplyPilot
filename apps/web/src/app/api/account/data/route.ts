@@ -1,12 +1,19 @@
 import { NextResponse } from 'next/server';
 
-import { resolveCandidateId } from '../../_lib';
-import { getDashboardData } from '@/server/services/app-service';
-import { store } from '@/server/services/store';
+import { requireRouteAuth } from '@/server/auth';
+import { getDashboardData, withAppStore } from '@/server/services/app-service';
+import { withAuthenticatedRoute } from '../../_lib';
 
 export async function GET(request: Request) {
-  const candidateId = resolveCandidateId(request);
-  const snapshot = await getDashboardData(candidateId);
+  const { auth, response } = await requireRouteAuth(request);
+
+  if (response) {
+    return response;
+  }
+
+  const snapshot = await withAppStore(auth.store, () =>
+    getDashboardData(auth.candidateId),
+  );
 
   return NextResponse.json(snapshot, {
     headers: {
@@ -16,10 +23,10 @@ export async function GET(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const candidateId = resolveCandidateId(request);
-  await store.clearCandidateData(candidateId);
-  return NextResponse.json({
-    ok: true,
+  return withAuthenticatedRoute(request, async ({ candidateId, store }) => {
+    await store.clearCandidateData(candidateId);
+    return {
+      ok: true,
+    };
   });
 }
-

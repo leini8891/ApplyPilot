@@ -1,14 +1,11 @@
-import { withRouteError } from '../../../_lib';
-
-import { resolveCandidateId } from '../../../_lib';
+import { withAuthenticatedRoute } from '../../../_lib';
 import { markApplicationForReview } from '@/server/services/app-service';
 
 export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  return withRouteError(async () => {
-    const candidateId = resolveCandidateId(request);
+  return withAuthenticatedRoute(request, async ({ candidateId }) => {
     const body = (await request.json()) as { reason?: string };
     const { id } = await context.params;
 
@@ -19,4 +16,3 @@ export async function POST(
     });
   });
 }
-

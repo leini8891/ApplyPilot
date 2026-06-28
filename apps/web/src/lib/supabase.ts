@@ -1,11 +1,11 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-import { env, hasSupabaseConfig } from './env';
+import { env, hasSupabaseServiceRoleConfig } from './env';
 
 let cachedClient: SupabaseClient | null = null;
 
-export const getSupabaseAdminClient = () => {
-  if (!hasSupabaseConfig) {
+export const getSupabaseServiceRoleClient = () => {
+  if (!hasSupabaseServiceRoleConfig) {
     return null;
   }
 

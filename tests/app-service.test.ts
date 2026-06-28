@@ -19,9 +19,11 @@ import { store } from '../apps/web/src/server/services/store';
 
 describe('app service saved jobs and material search', () => {
   const candidateId = 'app-service-test-user';
+  const otherCandidateId = 'app-service-test-other-user';
 
   afterEach(async () => {
     await store.clearCandidateData(candidateId);
+    await store.clearCandidateData(otherCandidateId);
   });
 
   it('syncs manually saved jobs into the application tracker', async () => {
@@ -35,7 +37,8 @@ describe('app service saved jobs and material search', () => {
         company: 'Workflow Co',
         location: 'Remote',
         url: 'https://www.linkedin.com/jobs/view/424242/',
-        description: 'Own workflow automation, customer trust, and onboarding conversion.',
+        description:
+          'Own workflow automation, customer trust, and onboarding conversion.',
         easyApply: false,
       },
     });
@@ -96,11 +99,46 @@ describe('app service saved jobs and material search', () => {
     });
 
     const attempts = await store.listAttempts(candidateId);
-    const refreshedAttempt = attempts.find((item) => item.jobPostingId === job.id);
+    const refreshedAttempt = attempts.find(
+      (item) => item.jobPostingId === job.id,
+    );
 
     expect(attempts).toHaveLength(1);
     expect(refreshedAttempt?.status).toBe('submitted');
     expect(refreshedAttempt?.metadata.title).toBe('Product Lead, Workflows');
+  });
+
+  it('keeps manually saved jobs isolated per candidate', async () => {
+    await saveManualJob({
+      candidateId,
+      input: {
+        source: 'linkedin',
+        title: 'Product Manager, User A',
+        company: 'User A Co',
+        location: 'Remote',
+        url: 'https://www.linkedin.com/jobs/view/818181/',
+        description: 'Own workflow automation for user A.',
+      },
+    });
+    await saveManualJob({
+      candidateId: otherCandidateId,
+      input: {
+        source: 'linkedin',
+        title: 'Product Manager, User B',
+        company: 'User B Co',
+        location: 'Remote',
+        url: 'https://www.linkedin.com/jobs/view/919191/',
+        description: 'Own workflow automation for user B.',
+      },
+    });
+
+    const userAJobs = await store.listJobs(candidateId);
+    const userBJobs = await store.listJobs(otherCandidateId);
+
+    expect(userAJobs.some((job) => job.company === 'User A Co')).toBe(true);
+    expect(userAJobs.some((job) => job.company === 'User B Co')).toBe(false);
+    expect(userBJobs.some((job) => job.company === 'User B Co')).toBe(true);
+    expect(userBJobs.some((job) => job.company === 'User A Co')).toBe(false);
   });
 
   it('keeps drafted saved jobs visible in Daily Picks for prep review', async () => {
@@ -185,7 +223,9 @@ describe('app service saved jobs and material search', () => {
 
     expect(attempt.status).toBe('drafted');
     expect(preview.preparedAt).toBeNull();
-    expect(preview.checklist.some((item) => item.id === 'resume-evidence')).toBe(true);
+    expect(
+      preview.checklist.some((item) => item.id === 'resume-evidence'),
+    ).toBe(true);
     expect(preview.resumeMatches.length).toBeGreaterThan(0);
     expect(preview.knowledgeMatches.length).toBeGreaterThan(0);
 
@@ -206,7 +246,11 @@ describe('app service saved jobs and material search', () => {
 
   it('retrieves resume material for a scored job', () => {
     const job = demoJobs[0];
-    const score = scoreJobAgainstPreferences(demoCandidateProfile, demoPreferences, job);
+    const score = scoreJobAgainstPreferences(
+      demoCandidateProfile,
+      demoPreferences,
+      job,
+    );
     const matches = matchResumeMaterialsForJob({
       profile: demoCandidateProfile,
       resumes: [demoResume],
@@ -215,6 +259,8 @@ describe('app service saved jobs and material search', () => {
     });
 
     expect(matches.length).toBeGreaterThan(0);
-    expect(matches.some((match) => match.reason.toLowerCase().includes('workflow'))).toBe(true);
+    expect(
+      matches.some((match) => match.reason.toLowerCase().includes('workflow')),
+    ).toBe(true);
   });
 });

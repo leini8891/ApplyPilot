@@ -1,11 +1,8 @@
-import { withRouteError } from '../../_lib';
-
-import { resolveCandidateId } from '../../_lib';
+import { withAuthenticatedRoute } from '../../_lib';
 import { handleResumeUpload } from '@/server/services/app-service';
 
 export async function POST(request: Request) {
-  return withRouteError(async () => {
-    const candidateId = resolveCandidateId(request);
+  return withAuthenticatedRoute(request, async ({ candidateId }) => {
     const formData = await request.formData();
     const file = formData.get('file');
     const label = formData.get('label');
@@ -23,4 +20,3 @@ export async function POST(request: Request) {
     return { resume };
   });
 }
-

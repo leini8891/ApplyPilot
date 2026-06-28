@@ -1,11 +1,14 @@
-import { withRouteError } from '../../../_lib';
+import { withAuthenticatedRoute } from '../../../_lib';
+import {
+  getApplicationWorkflow,
+  prepareApplicationWorkflow,
+} from '@/server/services/app-service';
 
-import { resolveCandidateId } from '../../../_lib';
-import { getApplicationWorkflow, prepareApplicationWorkflow } from '@/server/services/app-service';
-
-export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
-  return withRouteError(async () => {
-    const candidateId = resolveCandidateId(request);
+export async function GET(
+  request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
+  return withAuthenticatedRoute(request, async ({ candidateId }) => {
     const { id } = await context.params;
 
     return {
@@ -17,9 +20,11 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   });
 }
 
-export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
-  return withRouteError(async () => {
-    const candidateId = resolveCandidateId(request);
+export async function POST(
+  request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
+  return withAuthenticatedRoute(request, async ({ candidateId }) => {
     const { id } = await context.params;
 
     return prepareApplicationWorkflow({

@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
 
-import { getCandidateId } from '@/server/services/app-service';
-
-export const resolveCandidateId = (request: Request) =>
-  getCandidateId(request.headers.get('x-applypilot-user') ?? undefined);
+import { requireRouteAuth, type AuthContext } from '@/server/auth';
+import { withAppStore } from '@/server/services/app-service';
 
 export const withRouteError = async <T>(callback: () => Promise<T>) => {
   try {
@@ -12,7 +10,8 @@ export const withRouteError = async <T>(callback: () => Promise<T>) => {
   } catch (error) {
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : 'Unexpected server error.',
+        error:
+          error instanceof Error ? error.message : 'Unexpected server error.',
       },
       {
         status: 400,
@@ -21,3 +20,15 @@ export const withRouteError = async <T>(callback: () => Promise<T>) => {
   }
 };
 
+export const withAuthenticatedRoute = async <T>(
+  request: Request,
+  callback: (auth: AuthContext) => Promise<T>,
+) => {
+  const { auth, response } = await requireRouteAuth(request);
+
+  if (response) {
+    return response;
+  }
+
+  return withRouteError(() => withAppStore(auth.store, () => callback(auth)));
+};

@@ -1,13 +1,25 @@
 import { NextResponse } from 'next/server';
 
-import { store } from '@/server/services/store';
+import { requireRouteAuth } from '@/server/auth';
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ path: string[] }> },
 ) {
+  const { auth, response } = await requireRouteAuth(request);
+
+  if (response) {
+    return response;
+  }
+
   const { path } = await context.params;
-  const asset = await store.getBinaryAsset(path.join('/'));
+  const assetPath = path.join('/');
+
+  if (!assetPath.includes(`/${auth.candidateId}/`)) {
+    return new NextResponse('Not found', { status: 404 });
+  }
+
+  const asset = await auth.store.getBinaryAsset(assetPath);
 
   if (!asset) {
     return new NextResponse('Not found', { status: 404 });
@@ -20,4 +32,3 @@ export async function GET(
     },
   });
 }
-

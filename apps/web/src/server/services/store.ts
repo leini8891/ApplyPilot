@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 
 import {
@@ -37,13 +38,13 @@ import {
 } from '@applypilot/domain';
 
 import { env } from '@/lib/env';
-import { getSupabaseAdminClient } from '@/lib/supabase';
 
 type MemoryStore = {
   profiles: CandidateProfile[];
   resumes: ResumeVersion[];
   preferences: JobPreference[];
   jobs: JobPosting[];
+  jobOwners: Record<string, string | null>;
   scores: MatchScore[];
   tailoredResumes: TailoredResume[];
   runs: ApplicationRun[];
@@ -58,16 +59,21 @@ const memoryStoreSchema = z.object({
   resumes: z.array(resumeVersionSchema).default([]),
   preferences: z.array(jobPreferenceSchema).default([]),
   jobs: z.array(jobPostingSchema).default([]),
+  jobOwners: z.record(z.string().nullable()).default({}),
   scores: z.array(matchScoreSchema).default([]),
   tailoredResumes: z.array(tailoredResumeSchema).default([]),
   runs: z.array(applicationRunSchema).default([]),
   attempts: z.array(applicationAttemptSchema).default([]),
   reviews: z.array(reviewQueueItemSchema).default([]),
   interviews: z.array(interviewRecordSchema).default([]),
-  assets: z.record(z.object({
-    bytes: z.string(),
-    contentType: z.string(),
-  })).default({}),
+  assets: z
+    .record(
+      z.object({
+        bytes: z.string(),
+        contentType: z.string(),
+      }),
+    )
+    .default({}),
 });
 
 type ApplicationDetail = {
@@ -90,6 +96,7 @@ const createSeedStore = (): MemoryStore => ({
   resumes: [demoResume],
   preferences: [demoPreferences],
   jobs: demoJobs,
+  jobOwners: {},
   scores: [],
   tailoredResumes: [],
   runs: [demoRun],
@@ -131,9 +138,14 @@ const loadLocalStore = () => {
       return null;
     }
 
-    return memoryStoreSchema.parse(JSON.parse(fs.readFileSync(localStorePath, 'utf8')));
+    return memoryStoreSchema.parse(
+      JSON.parse(fs.readFileSync(localStorePath, 'utf8')),
+    );
   } catch (error) {
-    console.warn(`[store] Could not load ${localStorePath}. Falling back to seeded memory store.`, error);
+    console.warn(
+      `[store] Could not load ${localStorePath}. Falling back to seeded memory store.`,
+      error,
+    );
     return null;
   }
 };
@@ -144,17 +156,24 @@ const persistMemoryStore = () => {
   try {
     fs.mkdirSync(path.dirname(localStorePath), { recursive: true });
     const tmpPath = `${localStorePath}.tmp`;
-    fs.writeFileSync(tmpPath, `${JSON.stringify(memoryStoreSchema.parse(memoryStore), null, 2)}\n`);
+    fs.writeFileSync(
+      tmpPath,
+      `${JSON.stringify(memoryStoreSchema.parse(memoryStore), null, 2)}\n`,
+    );
     fs.renameSync(tmpPath, localStorePath);
   } catch (error) {
     if (!localStoreWriteWarningShown) {
       localStoreWriteWarningShown = true;
-      console.warn(`[store] Could not persist ${localStorePath}. Continuing in memory.`, error);
+      console.warn(
+        `[store] Could not persist ${localStorePath}. Continuing in memory.`,
+        error,
+      );
     }
   }
 };
 
-const memoryStore = globalThis.__applypilotStore ?? loadLocalStore() ?? createSeedStore();
+const memoryStore =
+  globalThis.__applypilotStore ?? loadLocalStore() ?? createSeedStore();
 globalThis.__applypilotStore = memoryStore;
 
 const tableMap = {
@@ -181,7 +200,9 @@ const normalizeTimestamp = (value: unknown) => {
 };
 
 const nonEmptyString = (value: unknown, fallback: string) =>
-  typeof value === 'string' && value.trim().length > 0 ? value.trim() : fallback;
+  typeof value === 'string' && value.trim().length > 0
+    ? value.trim()
+    : fallback;
 
 const mapRow = {
   profile: (row: Record<string, unknown>): CandidateProfile =>
@@ -342,9 +363,12 @@ const savedJobsRunPrefix = 'run_saved_jobs';
 const listFromMemory = <T>(items: T[]) => clone(items);
 
 const findRunIdsForCandidate = (candidateId: string, runs: ApplicationRun[]) =>
-  new Set(runs.filter((run) => run.candidateId === candidateId).map((run) => run.id));
+  new Set(
+    runs.filter((run) => run.candidateId === candidateId).map((run) => run.id),
+  );
 
-const isTrackerSyncRun = (run: ApplicationRun) => run.id.startsWith(`${savedJobsRunPrefix}_`);
+const isTrackerSyncRun = (run: ApplicationRun) =>
+  run.id.startsWith(`${savedJobsRunPrefix}_`);
 
 const sortRunsByStartedAtDesc = (runs: ApplicationRun[]) =>
   runs.sort((left, right) => right.startedAt.localeCompare(left.startedAt));
@@ -359,7 +383,9 @@ const shouldFallbackToMemory = (error: unknown) => {
         ? `${error.name}: ${error.message}`
         : JSON.stringify(error);
 
-  return /fetch failed|ENOTFOUND|ECONNREFUSED|ETIMEDOUT|network|StorageUnknownError/i.test(detail);
+  return /fetch failed|ENOTFOUND|ECONNREFUSED|ETIMEDOUT|network|StorageUnknownError/i.test(
+    detail,
+  );
 };
 
 const handleSupabaseError = (error: unknown, operation: string) => {
@@ -376,13 +402,14 @@ const handleSupabaseError = (error: unknown, operation: string) => {
 };
 
 const isDbMode = (
-  supabase: ReturnType<typeof getSupabaseAdminClient>,
-): supabase is NonNullable<ReturnType<typeof getSupabaseAdminClient>> =>
-  Boolean(supabase) && !useDemoData;
+  supabase: SupabaseClient | null,
+): supabase is SupabaseClient => Boolean(supabase) && !useDemoData;
 
-export const store = {
+export const createAppStore = (
+  requestSupabase: SupabaseClient | null = null,
+) => ({
   async getProfile(candidateId: string) {
-    const supabase = getSupabaseAdminClient();
+    const supabase = requestSupabase;
 
     if (isDbMode(supabase)) {
       const { data, error } = await supabase
@@ -400,7 +427,11 @@ export const store = {
       }
     }
 
-    return listFromMemory(memoryStore.profiles).find((profile) => profile.id === candidateId) ?? null;
+    return (
+      listFromMemory(memoryStore.profiles).find(
+        (profile) => profile.id === candidateId,
+      ) ?? null
+    );
   },
   async ensureCandidateProfile(candidateId: string) {
     const existing = await this.getProfile(candidateId);
@@ -441,7 +472,7 @@ export const store = {
     return this.upsertProfile(baseProfile);
   },
   async upsertProfile(profile: CandidateProfile) {
-    const supabase = getSupabaseAdminClient();
+    const supabase = requestSupabase;
 
     if (isDbMode(supabase)) {
       const { error } = await supabase.from(tableMap.profiles).upsert({
@@ -465,7 +496,9 @@ export const store = {
       }
     }
 
-    const existing = memoryStore.profiles.findIndex((item) => item.id === profile.id);
+    const existing = memoryStore.profiles.findIndex(
+      (item) => item.id === profile.id,
+    );
     if (existing >= 0) {
       memoryStore.profiles[existing] = clone(profile);
     } else {
@@ -476,7 +509,7 @@ export const store = {
     return profile;
   },
   async listResumes(candidateId: string) {
-    const supabase = getSupabaseAdminClient();
+    const supabase = requestSupabase;
 
     if (isDbMode(supabase)) {
       const { data, error } = await supabase
@@ -494,10 +527,12 @@ export const store = {
       }
     }
 
-    return listFromMemory(memoryStore.resumes).filter((resume) => resume.candidateId === candidateId);
+    return listFromMemory(memoryStore.resumes).filter(
+      (resume) => resume.candidateId === candidateId,
+    );
   },
   async saveResume(resume: ResumeVersion) {
-    const supabase = getSupabaseAdminClient();
+    const supabase = requestSupabase;
 
     if (isDbMode(supabase)) {
       const { error } = await supabase.from(tableMap.resumes).upsert({
@@ -517,7 +552,9 @@ export const store = {
       }
     }
 
-    const existing = memoryStore.resumes.findIndex((item) => item.id === resume.id);
+    const existing = memoryStore.resumes.findIndex(
+      (item) => item.id === resume.id,
+    );
     if (existing >= 0) {
       memoryStore.resumes[existing] = clone(resume);
     } else {
@@ -528,7 +565,7 @@ export const store = {
     return resume;
   },
   async getPreferences(candidateId: string) {
-    const supabase = getSupabaseAdminClient();
+    const supabase = requestSupabase;
 
     if (isDbMode(supabase)) {
       const { data, error } = await supabase
@@ -547,12 +584,13 @@ export const store = {
     }
 
     return (
-      listFromMemory(memoryStore.preferences).find((preference) => preference.candidateId === candidateId) ??
-      null
+      listFromMemory(memoryStore.preferences).find(
+        (preference) => preference.candidateId === candidateId,
+      ) ?? null
     );
   },
   async upsertPreferences(preference: JobPreference) {
-    const supabase = getSupabaseAdminClient();
+    const supabase = requestSupabase;
 
     if (isDbMode(supabase)) {
       const { error } = await supabase.from(tableMap.preferences).upsert({
@@ -592,12 +630,13 @@ export const store = {
     persistMemoryStore();
     return preference;
   },
-  async saveJob(job: JobPosting) {
-    const supabase = getSupabaseAdminClient();
+  async saveJob(job: JobPosting, candidateId?: string) {
+    const supabase = requestSupabase;
 
     if (isDbMode(supabase)) {
       const { error } = await supabase.from(tableMap.jobs).upsert({
         id: job.id,
+        candidate_id: candidateId ?? null,
         source: job.source,
         external_job_id: job.externalJobId,
         title: job.title,
@@ -623,12 +662,13 @@ export const store = {
     } else {
       memoryStore.jobs.unshift(clone(job));
     }
+    memoryStore.jobOwners[job.id] = candidateId ?? null;
 
     persistMemoryStore();
     return job;
   },
-  async listJobs() {
-    const supabase = getSupabaseAdminClient();
+  async listJobs(candidateId?: string) {
+    const supabase = requestSupabase;
 
     if (isDbMode(supabase)) {
       const { data, error } = await supabase
@@ -645,10 +685,14 @@ export const store = {
       }
     }
 
-    return listFromMemory(memoryStore.jobs);
+    return listFromMemory(memoryStore.jobs).filter((job) => {
+      const owner = memoryStore.jobOwners[job.id];
+
+      return !owner || !candidateId || owner === candidateId;
+    });
   },
   async saveMatchScore(score: MatchScore) {
-    const supabase = getSupabaseAdminClient();
+    const supabase = requestSupabase;
 
     if (isDbMode(supabase)) {
       const { error } = await supabase.from(tableMap.scores).upsert({
@@ -668,7 +712,9 @@ export const store = {
       }
     }
 
-    const existing = memoryStore.scores.findIndex((item) => item.id === score.id);
+    const existing = memoryStore.scores.findIndex(
+      (item) => item.id === score.id,
+    );
     if (existing >= 0) {
       memoryStore.scores[existing] = clone(score);
     } else {
@@ -679,7 +725,7 @@ export const store = {
     return score;
   },
   async saveTailoredResume(tailoredResume: TailoredResume) {
-    const supabase = getSupabaseAdminClient();
+    const supabase = requestSupabase;
 
     if (isDbMode(supabase)) {
       const { error } = await supabase.from(tableMap.tailoredResumes).upsert({
@@ -699,7 +745,9 @@ export const store = {
       }
     }
 
-    const existing = memoryStore.tailoredResumes.findIndex((item) => item.id === tailoredResume.id);
+    const existing = memoryStore.tailoredResumes.findIndex(
+      (item) => item.id === tailoredResume.id,
+    );
     if (existing >= 0) {
       memoryStore.tailoredResumes[existing] = clone(tailoredResume);
     } else {
@@ -710,7 +758,7 @@ export const store = {
     return tailoredResume;
   },
   async listTailoredResumes(candidateId: string) {
-    const supabase = getSupabaseAdminClient();
+    const supabase = requestSupabase;
 
     if (isDbMode(supabase)) {
       const { data, error } = await supabase
@@ -733,7 +781,7 @@ export const store = {
     );
   },
   async createRun(run: ApplicationRun) {
-    const supabase = getSupabaseAdminClient();
+    const supabase = requestSupabase;
 
     if (isDbMode(supabase)) {
       const { error } = await supabase.from(tableMap.runs).insert({
@@ -761,7 +809,7 @@ export const store = {
     return run;
   },
   async listRuns(candidateId: string) {
-    const supabase = getSupabaseAdminClient();
+    const supabase = requestSupabase;
 
     if (isDbMode(supabase)) {
       const { data, error } = await supabase
@@ -780,11 +828,13 @@ export const store = {
     }
 
     return sortRunsByStartedAtDesc(
-      listFromMemory(memoryStore.runs).filter((run) => run.candidateId === candidateId),
+      listFromMemory(memoryStore.runs).filter(
+        (run) => run.candidateId === candidateId,
+      ),
     );
   },
   async saveAttempt(attempt: ApplicationAttempt) {
-    const supabase = getSupabaseAdminClient();
+    const supabase = requestSupabase;
 
     if (isDbMode(supabase)) {
       const { error } = await supabase.from(tableMap.attempts).upsert({
@@ -807,7 +857,9 @@ export const store = {
       }
     }
 
-    const existing = memoryStore.attempts.findIndex((item) => item.id === attempt.id);
+    const existing = memoryStore.attempts.findIndex(
+      (item) => item.id === attempt.id,
+    );
     if (existing >= 0) {
       memoryStore.attempts[existing] = clone(attempt);
     } else {
@@ -818,7 +870,7 @@ export const store = {
     return attempt;
   },
   async listAttempts(candidateId: string) {
-    const supabase = getSupabaseAdminClient();
+    const supabase = requestSupabase;
 
     if (isDbMode(supabase)) {
       const runs = await this.listRuns(candidateId);
@@ -843,9 +895,14 @@ export const store = {
     }
 
     const runIds = findRunIdsForCandidate(candidateId, memoryStore.runs);
-    return listFromMemory(memoryStore.attempts).filter((attempt) => runIds.has(attempt.runId));
+    return listFromMemory(memoryStore.attempts).filter((attempt) =>
+      runIds.has(attempt.runId),
+    );
   },
-  async getApplicationDetail(candidateId: string, applicationId: string): Promise<ApplicationDetail | null> {
+  async getApplicationDetail(
+    candidateId: string,
+    applicationId: string,
+  ): Promise<ApplicationDetail | null> {
     const attempts = await this.listAttempts(candidateId);
     const attempt = attempts.find((item) => item.id === applicationId);
     if (!attempt) {
@@ -854,7 +911,7 @@ export const store = {
 
     const [runs, jobs, reviews, interviews] = await Promise.all([
       this.listRuns(candidateId),
-      this.listJobs(),
+      this.listJobs(candidateId),
       this.listReviewQueue(candidateId),
       this.listInterviews(candidateId),
     ]);
@@ -863,12 +920,16 @@ export const store = {
       attempt,
       run: runs.find((run) => run.id === attempt.runId) ?? null,
       job: jobs.find((job) => job.id === attempt.jobPostingId) ?? null,
-      reviewItems: reviews.filter((review) => review.applicationId === attempt.id),
-      interviews: interviews.filter((interview) => interview.applicationId === attempt.id),
+      reviewItems: reviews.filter(
+        (review) => review.applicationId === attempt.id,
+      ),
+      interviews: interviews.filter(
+        (interview) => interview.applicationId === attempt.id,
+      ),
     };
   },
   async createReviewItem(item: ReviewQueueItem) {
-    const supabase = getSupabaseAdminClient();
+    const supabase = requestSupabase;
 
     if (isDbMode(supabase)) {
       const { error } = await supabase.from(tableMap.reviews).insert({
@@ -895,7 +956,7 @@ export const store = {
   async listReviewQueue(candidateId: string) {
     const attempts = await this.listAttempts(candidateId);
     const applicationIds = new Set(attempts.map((attempt) => attempt.id));
-    const supabase = getSupabaseAdminClient();
+    const supabase = requestSupabase;
 
     if (isDbMode(supabase) && applicationIds.size > 0) {
       const { data, error } = await supabase
@@ -918,7 +979,7 @@ export const store = {
     );
   },
   async saveInterview(interview: InterviewRecord) {
-    const supabase = getSupabaseAdminClient();
+    const supabase = requestSupabase;
 
     if (isDbMode(supabase)) {
       const { error } = await supabase.from(tableMap.interviews).insert({
@@ -938,7 +999,9 @@ export const store = {
       }
     }
 
-    const existing = memoryStore.interviews.findIndex((item) => item.id === interview.id);
+    const existing = memoryStore.interviews.findIndex(
+      (item) => item.id === interview.id,
+    );
     if (existing >= 0) {
       memoryStore.interviews[existing] = clone(interview);
     } else {
@@ -951,7 +1014,7 @@ export const store = {
   async listInterviews(candidateId: string) {
     const attempts = await this.listAttempts(candidateId);
     const applicationIds = new Set(attempts.map((attempt) => attempt.id));
-    const supabase = getSupabaseAdminClient();
+    const supabase = requestSupabase;
 
     if (isDbMode(supabase) && applicationIds.size > 0) {
       const { data, error } = await supabase
@@ -989,17 +1052,25 @@ export const store = {
     });
   },
   async getDashboardSnapshot(candidateId: string) {
-    const [summary, profile, resumes, preference, runs, attempts, reviews, interviews] =
-      await Promise.all([
-        this.getDashboardSummary(candidateId),
-        this.getProfile(candidateId),
-        this.listResumes(candidateId),
-        this.getPreferences(candidateId),
-        this.listRuns(candidateId),
-        this.listAttempts(candidateId),
-        this.listReviewQueue(candidateId),
-        this.listInterviews(candidateId),
-      ]);
+    const [
+      summary,
+      profile,
+      resumes,
+      preference,
+      runs,
+      attempts,
+      reviews,
+      interviews,
+    ] = await Promise.all([
+      this.getDashboardSummary(candidateId),
+      this.getProfile(candidateId),
+      this.listResumes(candidateId),
+      this.getPreferences(candidateId),
+      this.listRuns(candidateId),
+      this.listAttempts(candidateId),
+      this.listReviewQueue(candidateId),
+      this.listInterviews(candidateId),
+    ]);
 
     return {
       summary,
@@ -1013,32 +1084,52 @@ export const store = {
     };
   },
   async clearCandidateData(candidateId: string) {
-    const supabase = getSupabaseAdminClient();
+    const supabase = requestSupabase;
 
     if (isDbMode(supabase)) {
-      const { error } = await supabase.from(tableMap.profiles).delete().eq('id', candidateId);
+      const { error } = await supabase
+        .from(tableMap.profiles)
+        .delete()
+        .eq('id', candidateId);
       if (error && !handleSupabaseError(error, 'clearCandidateData')) {
         throw error;
       }
     }
 
-    memoryStore.profiles = memoryStore.profiles.filter((profile) => profile.id !== candidateId);
-    memoryStore.resumes = memoryStore.resumes.filter((resume) => resume.candidateId !== candidateId);
+    memoryStore.profiles = memoryStore.profiles.filter(
+      (profile) => profile.id !== candidateId,
+    );
+    memoryStore.resumes = memoryStore.resumes.filter(
+      (resume) => resume.candidateId !== candidateId,
+    );
     memoryStore.preferences = memoryStore.preferences.filter(
       (preference) => preference.candidateId !== candidateId,
     );
-    memoryStore.scores = memoryStore.scores.filter((score) => score.candidateId !== candidateId);
+    memoryStore.scores = memoryStore.scores.filter(
+      (score) => score.candidateId !== candidateId,
+    );
     memoryStore.tailoredResumes = memoryStore.tailoredResumes.filter(
       (resume) => resume.candidateId !== candidateId,
     );
-    const candidateRunIds = findRunIdsForCandidate(candidateId, memoryStore.runs);
-    memoryStore.runs = memoryStore.runs.filter((run) => run.candidateId !== candidateId);
-    memoryStore.attempts = memoryStore.attempts.filter((attempt) => !candidateRunIds.has(attempt.runId));
+    const candidateRunIds = findRunIdsForCandidate(
+      candidateId,
+      memoryStore.runs,
+    );
+    memoryStore.runs = memoryStore.runs.filter(
+      (run) => run.candidateId !== candidateId,
+    );
+    memoryStore.attempts = memoryStore.attempts.filter(
+      (attempt) => !candidateRunIds.has(attempt.runId),
+    );
     memoryStore.reviews = memoryStore.reviews.filter((review) =>
-      memoryStore.attempts.some((attempt) => attempt.id === review.applicationId),
+      memoryStore.attempts.some(
+        (attempt) => attempt.id === review.applicationId,
+      ),
     );
     memoryStore.interviews = memoryStore.interviews.filter((interview) =>
-      memoryStore.attempts.some((attempt) => attempt.id === interview.applicationId),
+      memoryStore.attempts.some(
+        (attempt) => attempt.id === interview.applicationId,
+      ),
     );
 
     Object.keys(memoryStore.assets).forEach((path) => {
@@ -1059,23 +1150,38 @@ export const store = {
     contentType: string;
     bytes: Buffer;
   }) {
-    const supabase = getSupabaseAdminClient();
+    const supabase = requestSupabase;
 
     if (isDbMode(supabase)) {
-      const { error } = await supabase.storage.from(env.SUPABASE_STORAGE_BUCKET).upload(path, bytes, {
-        contentType,
-        upsert: true,
-      });
+      const { error } = await supabase.storage
+        .from(env.SUPABASE_STORAGE_BUCKET)
+        .upload(path, bytes, {
+          contentType,
+          upsert: true,
+        });
 
       if (error && !handleSupabaseError(error, 'storeBinaryAsset')) {
         throw error;
       }
 
       if (!error) {
-        const { data } = supabase.storage.from(env.SUPABASE_STORAGE_BUCKET).getPublicUrl(path);
+        const { data, error: signedUrlError } = await supabase.storage
+          .from(env.SUPABASE_STORAGE_BUCKET)
+          .createSignedUrl(path, 60 * 60);
+
+        if (
+          signedUrlError &&
+          !handleSupabaseError(
+            signedUrlError,
+            'storeBinaryAsset.createSignedUrl',
+          )
+        ) {
+          throw signedUrlError;
+        }
+
         return {
           storagePath: path,
-          publicUrl: data.publicUrl,
+          publicUrl: data?.signedUrl ?? null,
         };
       }
     }
@@ -1091,15 +1197,22 @@ export const store = {
       publicUrl: createLocalObjectUrl(path),
     };
   },
-  getAssetPublicUrl(path: string | null) {
+  async getAssetPublicUrl(path: string | null) {
     if (!path) {
       return null;
     }
 
-    const supabase = getSupabaseAdminClient();
+    const supabase = requestSupabase;
     if (isDbMode(supabase)) {
-      const { data } = supabase.storage.from(env.SUPABASE_STORAGE_BUCKET).getPublicUrl(path);
-      return data.publicUrl;
+      const { data, error } = await supabase.storage
+        .from(env.SUPABASE_STORAGE_BUCKET)
+        .createSignedUrl(path, 60 * 60);
+
+      if (error && !handleSupabaseError(error, 'getAssetPublicUrl')) {
+        throw error;
+      }
+
+      return data?.signedUrl ?? null;
     }
 
     return createLocalObjectUrl(path);
@@ -1116,6 +1229,10 @@ export const store = {
       contentType: asset.contentType,
     };
   },
-};
+});
+
+export type AppStore = ReturnType<typeof createAppStore>;
+
+export const store = createAppStore();
 
 export type { ApplicationDetail };

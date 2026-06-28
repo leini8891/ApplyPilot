@@ -1,14 +1,11 @@
-import { withRouteError } from '../../../_lib';
-
-import { resolveCandidateId } from '../../../_lib';
+import { withAuthenticatedRoute } from '../../../_lib';
 import { updateApplicationStatus } from '@/server/services/app-service';
 
 export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  return withRouteError(async () => {
-    const candidateId = resolveCandidateId(request);
+  return withAuthenticatedRoute(request, async ({ candidateId }) => {
     const body = (await request.json()) as { status?: string };
     const { id } = await context.params;
 
@@ -21,4 +18,3 @@ export async function PATCH(
     };
   });
 }
-

@@ -7,6 +7,7 @@ import {
   saveKnowledgeBaseEntry,
   type KnowledgeEntryKind,
 } from '@/server/services/knowledge-base';
+import { requirePageAuth } from '@/server/auth';
 
 const getText = (formData: FormData, key: string) => {
   const value = formData.get(key);
@@ -47,6 +48,8 @@ const getKind = (formData: FormData): KnowledgeEntryKind => {
 };
 
 export async function createKnowledgeBaseEntry(formData: FormData) {
+  await requirePageAuth();
+
   await saveKnowledgeBaseEntry({
     kind: getKind(formData),
     title: getRequiredText(formData, 'title', 'Title'),
