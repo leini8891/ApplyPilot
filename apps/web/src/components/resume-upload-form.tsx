@@ -52,7 +52,44 @@ export function ResumeUploadForm() {
       return;
     }
 
-    setStatus('Resume uploaded and profile parsed.');
+    setStatus('Searching matching jobs...');
+    const searchResponse = await fetch('/api/jobs/search-from-resume', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        resumeId: uploaded.resume.id,
+      }),
+    });
+
+    if (!searchResponse.ok) {
+      setStatus('Resume uploaded and profile parsed. Save preferences to search matching jobs.');
+      router.refresh();
+      return;
+    }
+
+    const searchResult = (await searchResponse.json()) as {
+      search: {
+        enabled: boolean;
+        savedCount: number;
+        disabledReason?: string;
+      };
+    };
+
+    if (!searchResult.search.enabled) {
+      setStatus(
+        'Resume uploaded and profile parsed. Job search is disabled until Adzuna API credentials are configured.',
+      );
+      router.refresh();
+      return;
+    }
+
+    setStatus(
+      searchResult.search.savedCount > 0
+        ? `Resume uploaded and ${searchResult.search.savedCount} matching jobs added to the tracker.`
+        : 'Resume uploaded and parsed. No matching jobs returned yet.',
+    );
     router.refresh();
   };
 
